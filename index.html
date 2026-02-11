@@ -6,57 +6,57 @@
     <title>GAD Lita Digital</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        body { font-family: sans-serif; margin: 0; padding: 20px; background: #f3f4f6; }
-        .container { max-width: 950px; margin: auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        h1 { color: #1e40af; text-align: center; margin-bottom: 25px; }
-        label { display: block; margin-top: 15px; font-weight: bold; color: #374151; }
+        body { font-family: sans-serif; margin: 0; padding: 20px; background: #f3f4f6; color: #374151; }
+        .container { max-width: 800px; margin: auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        .logo { width: 80px; display: block; margin: 0 auto 10px; }
+        h1 { color: #1e40af; text-align: center; font-size: 24px; }
+        label { display: block; margin-top: 15px; font-weight: bold; }
         input, textarea { width: 100%; padding: 12px; margin-top: 5px; border: 1px solid #d1d5db; border-radius: 8px; box-sizing: border-box; }
-        button#btnEnviar { width: 100%; padding: 15px; margin-top: 25px; background: #2563eb; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: bold; }
+        #btnEnviar { width: 100%; padding: 15px; margin-top: 25px; background: #2563eb; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
         
-        #panelAdmin { display: none; margin-top: 40px; border-top: 2px solid #e5e7eb; padding-top: 20px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 12px; }
-        th, td { border: 1px solid #e5e7eb; padding: 10px; text-align: left; }
-        th { background: #f9fafb; color: #1e40af; font-weight: bold; }
-        
-        .badge { padding: 4px 8px; border-radius: 10px; font-size: 11px; font-weight: bold; background: #fef9c3; color: #854d0e; }
-        .btn-resolver { background: #2563eb; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; margin-right: 5px; }
-        .btn-ignorar { background: #ef4444; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; }
-        .punto-acceso { color: #f3f4f6; text-align: center; margin-top: 60px; cursor: pointer; font-size: 12px; user-select: none; }
+        #panelAdmin { display: none; margin-top: 30px; }
+        table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 15px; }
+        th, td { border: 1px solid #e5e7eb; padding: 8px; text-align: left; }
+        th { background: #f9fafb; color: #1e40af; }
+        .badge { background: #fef9c3; color: #854d0e; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
+        .btn-accion { padding: 4px 8px; border-radius: 4px; border: none; color: white; cursor: pointer; margin-right: 2px; }
     </style>
 </head>
 <body>
 <div class="container">
-    <img src="logo-gad.png" alt="GAD Lita" style="width: 80px; display: block; margin: auto;">
-    <h1>Reporte Ciudadano</h1>
+    <img src="logo-gad.png" alt="Logo" class="logo">
+    <h1>Reporte Ciudadano Lita</h1>
     
     <div id="formReporte">
-        <label>Nombre del Ciudadano</label>
-        <input type="text" id="nombre" placeholder="Nombre completo">
+        <label>Nombre</label>
+        <input type="text" id="nombre" placeholder="Su nombre">
         <label>Sector</label>
-        <input type="text" id="sector" placeholder="Barrio o Sector">
+        <input type="text" id="sector" placeholder="Barrio o sector">
         <label>Detalle del Problema</label>
-        <textarea id="descripcion" rows="4" placeholder="Describa el inconveniente aquí..."></textarea>
-        <button id="btnEnviar" onclick="enviarReporte()">Enviar Reporte con GPS</button>
+        <textarea id="descripcion" rows="4" placeholder="Escriba aquí..."></textarea>
+        <button id="btnEnviar" onclick="enviar()">Enviar Reporte con GPS</button>
+        <p onclick="abrirAdmin()" style="text-align:center; color:#d1d5db; cursor:pointer; margin-top:40px;">.</p>
     </div>
 
     <div id="panelAdmin">
-        <h3>📊 Panel de Seguimiento</h3>
-        <table>
-            <thead>
-                <tr>
-                    <th>CIUDADANO</th>
-                    <th>SECTOR</th>
-                    <th>DETALLE</th>
-                    <th>ESTADO</th>
-                    <th>UBICACIÓN</th>
-                    <th>ACCIONES</th>
-                </tr>
-            </thead>
-            <tbody id="listaReportes"></tbody>
-        </table>
-        <button onclick="location.reload()" style="margin-top:20px; background:#6b7280; color:white; border:none; padding:10px; border-radius:5px; cursor:pointer;">Cerrar Panel</button>
+        <h2>Panel de Gestión</h2>
+        <div style="overflow-x:auto;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>CIUDADANO</th>
+                        <th>SECTOR</th>
+                        <th>DETALLE</th>
+                        <th>ESTADO</th>
+                        <th>MAPA</th>
+                        <th>ACCIÓN</th>
+                    </tr>
+                </thead>
+                <tbody id="tablaCuerpo"></tbody>
+            </table>
+        </div>
+        <button onclick="location.reload()" style="margin-top:20px; padding:10px; cursor:pointer;">Cerrar Panel</button>
     </div>
-    <div class="punto-acceso" onclick="accesoAdmin()">.</div>
 </div>
 <script src="main.js"></script>
 </body>
