@@ -13,23 +13,16 @@
         label { display: block; margin-top: 10px; font-weight: bold; }
         input, textarea { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; }
         button { width: 100%; padding: 12px; margin-top: 20px; background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; }
-        button:disabled { background: #94a3b8; }
         
         #panelAdmin { display: none; margin-top: 40px; border-top: 2px solid #ccc; }
         table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 11px; }
         th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-        th { background: #f8fafc; }
         
-        /* BOTÓN SECRETO CORREGIDO (Visible para pruebas) */
-        .btn-secreto { 
-            color: #94a3b8; /* Color gris visible */
-            cursor: pointer; 
-            text-align: center; 
-            margin-top: 50px; 
-            font-size: 18px; 
-            font-weight: bold;
-            user-select: none;
-            padding: 10px;
+        /* BOTÓN DE ACCESO VISIBLE ABAJO DEL ENVIAR */
+        .btn-admin-visible { 
+            display: block; width: 100px; margin: 20px auto 0; padding: 5px;
+            background: #e5e7eb; color: #9ca3af; text-align: center; 
+            border-radius: 4px; cursor: pointer; font-size: 12px; text-decoration: none;
         }
     </style>
 </head>
@@ -50,6 +43,8 @@
         <textarea id="descripcion" rows="4" placeholder="Detalle el problema..."></textarea>
 
         <button id="btnEnviar" onclick="enviarReporte()">Enviar Reporte con GPS</button>
+        
+        <div class="btn-admin-visible" onclick="accesoAdmin()">Panel Admin</div>
     </div>
 
     <div id="panelAdmin">
@@ -65,9 +60,8 @@
             </thead>
             <tbody id="listaReportes"></tbody>
         </table>
+        <button onclick="location.reload()" style="background:#6b7280; margin-top:10px;">Volver al Formulario</button>
     </div>
-
-    <div class="btn-secreto" onclick="accesoAdmin()">.</div>
 </div>
 
 <script src="main.js"></script>
