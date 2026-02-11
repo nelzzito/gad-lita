@@ -16,7 +16,7 @@
         #panelAdmin { display: none; margin-top: 40px; border-top: 2px solid #ccc; }
         table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 11px; }
         th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-        .btn-access { color: #f3f4f6; text-decoration: none; font-size: 12px; display: block; text-align: center; margin-top: 50px; cursor: pointer; padding: 10px; }
+        .btn-secreto { color: #f3f4f6; cursor: pointer; text-align: center; margin-top: 50px; font-size: 10px; user-select: none; }
     </style>
 </head>
 <body>
@@ -26,16 +26,16 @@
     <h1>Reporte Ciudadano</h1>
     
     <div id="formReporte">
-        <label>Nombre del Ciudadano</label>
-        <input type="text" id="nombre" placeholder="Nombre completo">
+        <label>Nombre</label>
+        <input type="text" id="nombre" placeholder="Tu nombre">
 
         <label>Sector</label>
-        <input type="text" id="sector" placeholder="Escriba su barrio o sector">
+        <input type="text" id="sector" placeholder="Escribe tu sector">
 
-        <label>Descripción del Problema</label>
-        <textarea id="descripcion" rows="4" placeholder="Detalle el problema..."></textarea>
+        <label>Descripción</label>
+        <textarea id="descripcion" rows="4" placeholder="Detalla el problema..."></textarea>
 
-        <button onclick="enviarReporte()">Enviar Reporte con GPS</button>
+        <button id="btnEnviar" onclick="enviarReporte()">Enviar Reporte con GPS</button>
     </div>
 
     <div id="panelAdmin">
@@ -46,7 +46,6 @@
                     <th>CIUDADANO</th>
                     <th>SECTOR</th>
                     <th>DETALLE</th>
-                    <th>ESTADO</th>
                     <th>MAPA</th>
                 </tr>
             </thead>
@@ -54,7 +53,7 @@
         </table>
     </div>
 
-    <div class="btn-access" onclick="accesoAdmin()">.</div>
+    <div class="btn-secreto" onclick="accesoAdmin()">.</div>
 </div>
 
 <script src="main.js"></script>
