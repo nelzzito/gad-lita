@@ -2,52 +2,12 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>GAD Lita - Reportes Ciudadanos</title>
-
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    
     <script src="https://cdn.tailwindcss.com"></script>
-
-    <link rel="icon" type="image/png" href="logo-gad.png">
-    <link rel="apple-touch-icon" sizes="180x180" href="logo-gad.png">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-title" content="GAD Lita">
 </head>
-<body>
-<div class="container">
-    <img src="logo-gad.png" alt="GAD Lita" class="logo">
-    <h1>Reporte Ciudadano</h1>
-    
-    <div id="formReporte">
-        <label>Nombre del Ciudadano</label>
-        <input type="text" id="nombre" placeholder="Nombre completo">
-        <label>Sector</label>
-        <input type="text" id="sector" placeholder="Barrio o Sector">
-        <label>Descripción del Problema (Detalle)</label>
-        <textarea id="descripcion" rows="4" placeholder="Describa el inconveniente aquí..."></textarea>
-        <button id="btnEnviar" onclick="enviarReporte()">Enviar Reporte con GPS</button>
-    </div>
-
-    <div id="panelAdmin">
-        <h3>📊 Panel de Seguimiento</h3>
-        <table>
-            <thead>
-                <tr>
-                    <th>CIUDADANO</th>
-                    <th>SECTOR</th>
-                    <th>DETALLE</th>
-                    <th>ESTADO</th>
-                    <th>UBICACIÓN</th>
-                    <th>ACCIONES</th>
-                </tr>
-            </thead>
-            <tbody id="listaReportes"></tbody>
-        </table>
-        <button onclick="location.reload()" style="margin-top:20px; background:#6b7280; color:white; border:none; padding:10px; border-radius:5px; cursor:pointer;">Cerrar Panel</button>
-    </div>
-    <div class="punto-acceso" onclick="accesoAdmin()">.</div>
-</div>
-<script src="main.js"></script>
+<body class="bg-gray-100 p-5">
+    <div id="app" class="max-w-4xl mx-auto">
+        </div>
+    <script type="module" src="./main.js"></script>
 </body>
 </html>
