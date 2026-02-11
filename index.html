@@ -13,10 +13,10 @@
         label { display: block; margin-top: 10px; font-weight: bold; }
         input, textarea { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; }
         button { width: 100%; padding: 12px; margin-top: 20px; background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; }
-        #panelAdmin { display: none; margin-top: 40px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 12px; }
+        #panelAdmin { display: none; margin-top: 40px; border-top: 2px solid #ccc; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 11px; }
         th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-        .btn-access { color: #f3f4f6; text-decoration: none; font-size: 10px; display: block; text-align: center; margin-top: 40px; cursor: default; }
+        .btn-access { color: #f3f4f6; text-decoration: none; font-size: 12px; display: block; text-align: center; margin-top: 50px; cursor: pointer; padding: 10px; }
     </style>
 </head>
 <body>
@@ -27,19 +27,19 @@
     
     <div id="formReporte">
         <label>Nombre del Ciudadano</label>
-        <input type="text" id="nombre" placeholder="Ej: Juan Pérez">
+        <input type="text" id="nombre" placeholder="Nombre completo">
 
         <label>Sector</label>
-        <input type="text" id="sector" placeholder="Ej: Santa Rosa">
+        <input type="text" id="sector" placeholder="Escriba su barrio o sector">
 
-        <label>Descripción del Problema (Detalle)</label>
-        <textarea id="descripcion" rows="4" placeholder="Describa el problema aquí..."></textarea>
+        <label>Descripción del Problema</label>
+        <textarea id="descripcion" rows="4" placeholder="Detalle el problema..."></textarea>
 
         <button onclick="enviarReporte()">Enviar Reporte con GPS</button>
     </div>
 
     <div id="panelAdmin">
-        <h3>📊 Panel de Seguimiento</h3>
+        <h3>📊 Panel de Administración</h3>
         <table>
             <thead>
                 <tr>
@@ -47,14 +47,14 @@
                     <th>SECTOR</th>
                     <th>DETALLE</th>
                     <th>ESTADO</th>
-                    <th>UBICACIÓN</th>
+                    <th>MAPA</th>
                 </tr>
             </thead>
             <tbody id="listaReportes"></tbody>
         </table>
     </div>
 
-    <a href="javascript:void(0)" class="btn-access" onclick="accesoAdmin()">. access</a>
+    <div class="btn-access" onclick="accesoAdmin()">.</div>
 </div>
 
 <script src="main.js"></script>
