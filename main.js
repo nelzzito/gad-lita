@@ -3,7 +3,7 @@ import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 
 // 2. Configuración de conexión (Usa tus llaves reales aquí)
 const supabaseUrl = 'https://hnqshnbdndsvurffrpjs.supabase.co'
-const supabaseKey = 'TU_LLAVE_ANON_AQUÍ' // Reemplázala con la llave de tu panel de Supabase
+const supabaseKey = 'sb_publishable_wgDPu5O49WPdWsm_xE_jmA_hJ4PoEXp' // Reemplázala con la llave de tu panel de Supabase
 const supabase = createClient(supabaseUrl, supabaseKey)
 
 const app = document.getElementById('app');
