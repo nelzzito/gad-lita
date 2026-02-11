@@ -4,65 +4,68 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GAD Lita Digital</title>
-    <link rel="manifest" href="manifest.json">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         body { font-family: sans-serif; margin: 0; padding: 20px; background: #f3f4f6; }
-        .container { max-width: 1000px; margin: auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .container { max-width: 900px; margin: auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
         h1 { color: #1e40af; text-align: center; }
-        label { display: block; margin-top: 10px; font-weight: bold; }
-        input, textarea { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; }
-        button#btnEnviar { width: 100%; padding: 12px; margin-top: 20px; background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: bold; }
+        label { display: block; margin-top: 15px; font-weight: bold; }
+        input, textarea { width: 100%; padding: 12px; margin-top: 5px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; }
         
-        /* BOTÓN DE ACCESO MUY VISIBLE PARA PRUEBAS */
-        .btn-acceso-claro { display: block; width: 200px; margin: 20px auto; padding: 10px; background: #fee2e2; color: #ef4444; border: 2px solid #ef4444; text-align: center; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        /* BOTONES PRINCIPALES */
+        .btn-enviar { width: 100%; padding: 15px; margin-top: 20px; background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: bold; }
+        .btn-admin-v3 { width: 100%; padding: 10px; margin-top: 15px; background: #e2e8f0; color: #475569; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; font-weight: bold; }
 
-        #panelAdmin { display: none; margin-top: 40px; border-top: 3px solid #1e40af; }
+        #panelAdmin { display: none; margin-top: 40px; border-top: 4px solid #1e40af; padding-top: 20px; }
         table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 12px; }
         th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
-        th { background: #f8fafc; color: #1e40af; }
+        th { background: #eff6ff; color: #1e40af; }
         
-        .badge { padding: 4px 8px; border-radius: 10px; font-size: 11px; background: #fef9c3; color: #854d0e; font-weight: bold; }
-        .btn-resolver { background: #2563eb; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; margin-right: 5px; }
-        .btn-ignorar { background: #ef4444; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; }
+        .badge { padding: 4px 8px; border-radius: 10px; font-size: 11px; font-weight: bold; background: #fef9c3; color: #854d0e; }
+        .btn-res { background: #2563eb; color: white; border: none; padding: 6px; border-radius: 4px; cursor: pointer; font-size: 10px; }
+        .btn-ign { background: #ef4444; color: white; border: none; padding: 6px; border-radius: 4px; cursor: pointer; font-size: 10px; }
     </style>
 </head>
 <body>
+
 <div class="container">
-    <img src="https://cdn-icons-png.flaticon.com/512/609/609803.png" alt="Logo" style="width: 50px; display: block; margin: auto;">
-    <h1>Reporte Ciudadano Lita</h1>
+    <img src="logo-gad.png" alt="GAD Lita" style="width: 80px; display: block; margin: auto;">
+    <h1>Reporte Ciudadano</h1>
     
     <div id="formReporte">
         <label>Nombre del Ciudadano</label>
         <input type="text" id="nombre" placeholder="Nombre completo">
+        
         <label>Sector</label>
-        <input type="text" id="sector" placeholder="Barrio o sector">
-        <label>Detalle del reporte</label>
-        <textarea id="descripcion" rows="4" placeholder="Escriba aquí el problema..."></textarea>
+        <input type="text" id="sector" placeholder="Escriba su barrio">
         
-        <button id="btnEnviar" onclick="enviarReporte()">Enviar al GAD</button>
+        <label>Descripción del Problema</label>
+        <textarea id="descripcion" rows="4" placeholder="Detalle el reporte aquí..."></textarea>
         
-        <div class="btn-acceso-claro" onclick="accesoAdmin()">ENTRAR AL PANEL</div>
+        <button class="btn-enviar" onclick="enviarReporte()">ENVIAR REPORTE GPS</button>
+        
+        <button class="btn-admin-v3" onclick="accesoAdmin()">⚙️ ENTRAR AL PANEL DE CONTROL</button>
     </div>
 
     <div id="panelAdmin">
-        <h3>📊 Panel de Seguimiento</h3>
+        <h3>📊 Panel de Gestión de Reportes</h3>
         <table>
             <thead>
                 <tr>
-                    <th>CIUDADANO</th>
+                    <th>NOMBRE</th>
                     <th>SECTOR</th>
                     <th>DETALLE</th>
                     <th>ESTADO</th>
-                    <th>UBICACIÓN</th>
+                    <th>GPS</th>
                     <th>ACCIONES</th>
                 </tr>
             </thead>
             <tbody id="listaReportes"></tbody>
         </table>
-        <button onclick="location.reload()" style="margin:20px 0; background:#64748b; color:white; border:none; padding:10px; border-radius:5px; cursor:pointer;">Volver</button>
+        <button onclick="location.reload()" style="margin-top:20px; padding:10px; cursor:pointer;">Cerrar Panel</button>
     </div>
 </div>
+
 <script src="main.js"></script>
 </body>
 </html>
