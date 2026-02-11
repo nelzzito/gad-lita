@@ -1,4 +1,4 @@
-// Conexión estable a Supabase
+// CONEXIÓN DIRECTA Y ÚNICA
 const _supabase = supabase.createClient('https://vclmcliofzjofzllvytj.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZjbG1jbGlvZnpqb2Z6bGx2eXRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzgxMTM5NjMsImV4cCI6MjA1MzY4OTk2M30.6_tUisI56r3mR_z098i7-nU-P1fG_y2q1r-P1fG_y2q');
 
 function accesoAdmin() {
@@ -18,7 +18,7 @@ async function enviarReporte() {
 
     if (!nom || !sec || !des) return alert("Por favor complete todos los campos");
 
-    btn.innerText = "Localizando GPS...";
+    btn.innerText = "Enviando...";
     btn.disabled = true;
 
     navigator.geolocation.getCurrentPosition(async (pos) => {
@@ -29,15 +29,14 @@ async function enviarReporte() {
         }]);
 
         if (error) {
-            alert("Error de conexión: " + error.message);
+            alert("Error: " + error.message);
             btn.disabled = false;
-            btn.innerText = "Enviar Reporte con GPS";
         } else {
-            alert("✅ Reporte enviado correctamente");
+            alert("✅ Enviado con éxito");
             location.reload();
         }
     }, () => {
-        alert("Active el GPS de su celular/PC");
+        alert("Active el GPS para enviar el reporte");
         btn.disabled = false;
         btn.innerText = "Enviar Reporte con GPS";
     });
@@ -45,12 +44,12 @@ async function enviarReporte() {
 
 async function cargarReportes() {
     const lista = document.getElementById('listaReportes');
-    lista.innerHTML = "<tr><td colspan='6' style='text-align:center;'>Consultando base de datos...</td></tr>";
-
+    lista.innerHTML = "<tr><td colspan='6' style='text-align:center;'>Conectando con el servidor...</td></tr>";
+    
     const { data, error } = await _supabase.from('reportes').select('*').order('created_at', { ascending: false });
 
     if (error) {
-        lista.innerHTML = "<tr><td colspan='6' style='text-align:center; color:red;'>Error al cargar datos. Verifique su internet.</td></tr>";
+        lista.innerHTML = "<tr><td colspan='6' style='text-align:center; color:red;'>Error de conexión con la base de datos</td></tr>";
         return;
     }
 
@@ -62,17 +61,16 @@ async function cargarReportes() {
                 <td>${r.sector}</td>
                 <td>${r.descripcion}</td>
                 <td><span class="badge">${r.estado}</span></td>
-                <td><a href="${r.ubicacion}" target="_blank" style="text-decoration:none;">📍 Ver Mapa</a></td>
+                <td><a href="${r.ubicacion}" target="_blank">📍 Ver</a></td>
                 <td>
-                    <button class="btn-resolver" onclick="cambiarEstado('${r.id}', 'Resuelto')">Resolver</button>
-                    <button class="btn-ignorar" onclick="cambiarEstado('${r.id}', 'Ignorado')">Ignorar</button>
+                    <button class="btn-resolver" onclick="actualizarEstado('${r.id}', 'Resuelto')">Resolver</button>
+                    <button class="btn-ignorar" onclick="actualizarEstado('${r.id}', 'Ignorado')">Ignorar</button>
                 </td>
             </tr>`;
     });
 }
 
-async function cambiarEstado(id, nuevo) {
-    const { error } = await _supabase.from('reportes').update({ estado: nuevo }).eq('id', id);
+async function actualizarEstado(id, nuevoEstado) {
+    const { error } = await _supabase.from('reportes').update({ estado: nuevoEstado }).eq('id', id);
     if (!error) cargarReportes();
-    else alert("Error al actualizar estado");
 }
