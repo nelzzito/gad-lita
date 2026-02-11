@@ -83,14 +83,23 @@ async function actualizarTabla() {
 
     if (data) {
         data.forEach(item => {
+            // Lógica para colores según el estado
+            const colorEstado = item.estado === 'Pendiente' ? 'bg-yellow-100 text-yellow-800' : 
+                               item.estado === 'En Proceso' ? 'bg-blue-100 text-blue-800' : 
+                               'bg-green-100 text-green-800';
+
             cuerpo.innerHTML += `
                 <tr class="hover:bg-gray-50 transition">
                     <td class="p-4">${item.nombre_ciudadano}</td>
                     <td class="p-4 font-medium">${item.sector}</td>
                     <td class="p-4">
-                        <span class="px-3 py-1 rounded-full text-sm font-semibold ${item.estado === 'Pendiente' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'}">
+                        <span class="px-3 py-1 rounded-full text-sm font-semibold ${colorEstado}">
                             ${item.estado}
                         </span>
+                    </td>
+                    <td class="p-4 space-x-2">
+                        <button onclick="cambiarEstado('${item.id}', 'En Proceso')" class="text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600">Atender</button>
+                        <button onclick="cambiarEstado('${item.id}', 'Resuelto')" class="text-xs bg-green-500 text-white px-2 py-1 rounded hover:bg-green-600">Finalizar</button>
                     </td>
                 </tr>
             `;
@@ -100,3 +109,25 @@ async function actualizarTabla() {
 
 // Iniciar sistema
 cargarInterfaz();
+// Función para cambiar el estado de un reporte (Mejora 3)
+async function resolverReporte(id) {
+    const { error } = await supabase
+        .from('reportes')
+        .update({ estado: 'Resuelto' })
+        .eq('id', id);
+
+    if (!error) actualizarTabla();
+}
+// Función global para que los botones de la tabla puedan llamarla
+window.cambiarEstado = async function(id, nuevoEstado) {
+    const { error } = await supabase
+        .from('reportes')
+        .update({ estado: nuevoEstado })
+        .eq('id', id);
+
+    if (error) {
+        alert("Error al actualizar: " + error.message);
+    } else {
+        actualizarTabla(); // Recarga la tabla automáticamente para ver el cambio
+    }
+}
