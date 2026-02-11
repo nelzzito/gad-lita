@@ -13,10 +13,24 @@
         label { display: block; margin-top: 10px; font-weight: bold; }
         input, textarea { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; }
         button { width: 100%; padding: 12px; margin-top: 20px; background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; }
+        button:disabled { background: #94a3b8; }
+        
         #panelAdmin { display: none; margin-top: 40px; border-top: 2px solid #ccc; }
         table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 11px; }
         th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-        .btn-secreto { color: #f3f4f6; cursor: pointer; text-align: center; margin-top: 50px; font-size: 10px; user-select: none; }
+        th { background: #f8fafc; }
+        
+        /* BOTÓN SECRETO CORREGIDO (Visible para pruebas) */
+        .btn-secreto { 
+            color: #94a3b8; /* Color gris visible */
+            cursor: pointer; 
+            text-align: center; 
+            margin-top: 50px; 
+            font-size: 18px; 
+            font-weight: bold;
+            user-select: none;
+            padding: 10px;
+        }
     </style>
 </head>
 <body>
@@ -33,7 +47,7 @@
         <input type="text" id="sector" placeholder="Escribe tu sector">
 
         <label>Descripción</label>
-        <textarea id="descripcion" rows="4" placeholder="Detalla el problema..."></textarea>
+        <textarea id="descripcion" rows="4" placeholder="Detalle el problema..."></textarea>
 
         <button id="btnEnviar" onclick="enviarReporte()">Enviar Reporte con GPS</button>
     </div>
