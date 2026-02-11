@@ -164,3 +164,16 @@ if ('serviceWorker' in navigator) {
       .catch(err => console.error('❌ Error al preparar la instalación:', err));
   });
 }
+// FUNCIÓN PARA EL ACCESO SECRETO AL PANEL
+function accesoAdmin() {
+    const clave = prompt("Ingrese la clave de administrador:");
+    
+    if (clave === "LITA2026") {
+        alert("Acceso concedido");
+        document.getElementById('panelAdmin').style.display = 'block';
+        document.getElementById('formReporte').style.display = 'none';
+        cargarReportes(); // Esta función cargará los datos de la tabla
+    } else {
+        alert("Clave incorrecta");
+    }
+}
