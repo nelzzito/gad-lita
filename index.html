@@ -4,28 +4,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GAD Lita Digital</title>
-    
     <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#2563eb">
-    <link rel="apple-touch-icon" href="logo.png">
-
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    
     <style>
         body { font-family: sans-serif; margin: 0; padding: 20px; background: #f3f4f6; }
-        .container { max-width: 600px; margin: auto; background: white; padding: 20px; border-radius: 12px; shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .container { max-width: 600px; margin: auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
         h1 { color: #1e40af; text-align: center; }
         label { display: block; margin-top: 10px; font-weight: bold; }
-        input, textarea, select { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; }
+        input, textarea { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; }
         button { width: 100%; padding: 12px; margin-top: 20px; background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; }
-        button:hover { background: #1d4ed8; }
-        
-        /* Panel Admin Oculto */
-        #panelAdmin { display: none; margin-top: 40px; border-top: 2px solid #ddd; padding-top: 20px; }
+        #panelAdmin { display: none; margin-top: 40px; }
         table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 12px; }
         th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-        th { background: #f8fafc; }
-        .btn-access { color: #ccc; text-decoration: none; font-size: 10px; display: block; text-align: center; margin-top: 40px; }
+        .btn-access { color: #f3f4f6; text-decoration: none; font-size: 10px; display: block; text-align: center; margin-top: 40px; cursor: default; }
     </style>
 </head>
 <body>
@@ -39,12 +30,7 @@
         <input type="text" id="nombre" placeholder="Ej: Juan Pérez">
 
         <label>Sector</label>
-        <select id="sector">
-            <option value="Centro">Centro</option>
-            <option value="Santa Rosa">Santa Rosa</option>
-            <option value="Cachaco">Cachaco</option>
-            <option value="Parambas">Parambas</option>
-        </select>
+        <input type="text" id="sector" placeholder="Ej: Santa Rosa">
 
         <label>Descripción del Problema (Detalle)</label>
         <textarea id="descripcion" rows="4" placeholder="Describa el problema aquí..."></textarea>
@@ -53,25 +39,24 @@
     </div>
 
     <div id="panelAdmin">
-        <h3>Panel de Seguimiento GAD</h3>
-        <table id="tablaReportes">
+        <h3>📊 Panel de Seguimiento</h3>
+        <table>
             <thead>
                 <tr>
                     <th>CIUDADANO</th>
                     <th>SECTOR</th>
-                    <th>DETALLE</th> <th>ESTADO</th>
-                    <th>MAPA</th>
+                    <th>DETALLE</th>
+                    <th>ESTADO</th>
+                    <th>UBICACIÓN</th>
                 </tr>
             </thead>
-            <tbody id="listaReportes">
-                </tbody>
+            <tbody id="listaReportes"></tbody>
         </table>
     </div>
 
-    <a href="#" class="btn-access" onclick="accesoAdmin()">. access</a>
+    <a href="javascript:void(0)" class="btn-access" onclick="accesoAdmin()">. access</a>
 </div>
 
 <script src="main.js"></script>
-
 </body>
 </html>
