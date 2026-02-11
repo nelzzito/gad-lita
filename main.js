@@ -1,78 +1,158 @@
-const _supabase = supabase.createClient('https://vclmcliofzjofzllvytj.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZjbG1jbGlvZnpqb2Z6bGx2eXRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzgxMTM5NjMsImV4cCI6MjA1MzY4OTk2I30.6_tUisI56r3mR_z098i7-nU-P1fG_y2q1r-P1fG_y2q');
+// 1. IMPORTACIÓN Y CONFIGURACIÓN
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
+const supabaseUrl = 'https://hnqshnbdndsvurffrpjs.supabase.co'
+const supabaseKey = 'sb_publishable_wgDPu5O49WPdWsm_xE_jmA_hJ4PoEXp'
+const supabase = createClient(supabaseUrl, supabaseKey)
 
-function accesoAdmin() {
-    const clave = prompt("Seguridad GAD Lita - Ingrese Clave:");
-    if (clave === "LITA2026") {
-        document.getElementById('formReporte').style.display = 'none';
-        document.getElementById('panelAdmin').style.display = 'block';
-        cargarReportes();
-    }
+// 2. FUNCIONES DE APOYO (GPS)
+async function obtenerLinkMapa() {
+    return new Promise((resolve) => {
+        if (!navigator.geolocation) {
+            resolve("No soportado");
+        } else {
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    const lat = pos.coords.latitude;
+                    const lon = pos.coords.longitude;
+                    resolve(`https://www.google.com/maps?q=${lat},${lon}`);
+                },
+                () => resolve("No proporcionada"),
+                { timeout: 8000 }
+            );
+        }
+    });
 }
 
-async function enviarReporte() {
-    const nom = document.getElementById('nombre').value;
-    const sec = document.getElementById('sector').value;
-    const des = document.getElementById('descripcion').value;
-    const btn = document.getElementById('btnEnviar');
+// 3. LÓGICA DE ENVÍO DEL CIUDADANO (CORREGIDA)
+window.enviarReporte = async function() {
+    const nombre = document.getElementById('nombre').value;
+    const sector = document.getElementById('sector').value;
+    const detalle = document.getElementById('detalle').value;
 
-    if (!nom || !sec || !des) return alert("Por favor complete todos los campos");
+    if (!nombre || !sector || !detalle) {
+        return alert("⚠️ Por favor, llene todos los campos.");
+    }
 
+    const btn = document.querySelector("button[onclick='enviarReporte()']");
     btn.innerText = "Enviando...";
     btn.disabled = true;
 
-    navigator.geolocation.getCurrentPosition(async (pos) => {
-        const { error } = await _supabase.from('reportes').insert([{ 
-            nombre_ciudadano: nom, 
-            sector: sec, 
-            descripcion: des, 
-            ubicacion: `https://www.google.com/maps?q=${pos.coords.latitude},${pos.coords.longitude}`,
-            estado: 'Pendiente'
-        }]);
+    const linkGps = await obtenerLinkMapa();
 
-        if (error) {
-            alert("Error: " + error.message);
-            btn.disabled = false;
-            btn.innerText = "Enviar Reporte con GPS";
-        } else {
-            alert("✅ Reporte enviado");
-            location.reload();
-        }
-    }, () => {
-        alert("Active el GPS para enviar el reporte");
-        btn.disabled = false;
-        btn.innerText = "Enviar Reporte con GPS";
-    });
-}
-
-async function cargarReportes() {
-    const lista = document.getElementById('listaReportes');
-    lista.innerHTML = "<tr><td colspan='6' style='text-align:center;'>Cargando reportes...</td></tr>";
-
-    const { data, error } = await _supabase.from('reportes').select('*').order('created_at', { ascending: false });
+    const { error } = await supabase.from('reportes').insert([{ 
+        nombre_ciudadano: nombre, 
+        sector: sector, 
+        descripcion: detalle,
+        ubicacion: linkGps,
+        estado: 'Pendiente'
+    }]);
 
     if (error) {
-        lista.innerHTML = "<tr><td colspan='6' style='text-align:center; color:red;'>Error de conexión con la base de datos</td></tr>";
-        return;
+        alert("❌ Error: " + error.message);
+    } else {
+        alert("✅ Reporte enviado con éxito al GAD Lita.");
+        // Limpiar campos
+        document.getElementById('nombre').value = "";
+        document.getElementById('sector').value = "";
+        document.getElementById('detalle').value = "";
     }
+    
+    btn.innerText = "Enviar al GAD";
+    btn.disabled = false;
+}
 
-    lista.innerHTML = "";
-    data.forEach(r => {
-        lista.innerHTML += `
-            <tr>
-                <td>${r.nombre_ciudadano}</td>
-                <td>${r.sector}</td>
-                <td>${r.descripcion || '-'}</td>
-                <td><span class="badge">${r.estado}</span></td>
-                <td><a href="${r.ubicacion}" target="_blank">📍 Ver</a></td>
-                <td>
-                    <button class="btn-resolver" onclick="cambiarEstado('${r.id}', 'Resuelto')">OK</button>
-                    <button class="btn-ignorar" onclick="cambiarEstado('${r.id}', 'Ignorado')">X</button>
-                </td>
-            </tr>`;
+// 4. FUNCIONES ADMINISTRATIVAS (Resolver e Ignorar)
+window.cambiarEstado = async function(id, nuevoEstado) {
+    const { error } = await supabase.from('reportes').update({ estado: nuevoEstado }).eq('id', id);
+    if (!error) {
+        alert("✅ Reporte Finalizado.");
+        actualizarTabla(); 
+    }
+}
+
+window.eliminarReporte = async function(id) {
+    if (confirm("⚠️ ¿Estás seguro de IGNORAR este reporte? Se borrará para siempre.")) {
+        const { error } = await supabase.from('reportes').delete().eq('id', id);
+        if (!error) {
+            alert("🗑️ Reporte eliminado.");
+            actualizarTabla();
+        }
+    }
+}
+
+// 5. ACCESO Y DIBUJO DE TABLA
+window.verificarAdmin = function() {
+    const clave = prompt("Ingrese la clave:");
+    if (clave === "LITA2026") {
+        document.getElementById('panelAdmin').style.setProperty('display', 'block', 'important');
+        actualizarTabla();
+    }
+}
+
+async function actualizarTabla() {
+    const { data, error } = await supabase.from('reportes').select('*').order('created_at', { ascending: false });
+    const contenedor = document.getElementById('tablaReportes');
+    if (error || !contenedor) return;
+
+    contenedor.innerHTML = `
+        <table class="w-full text-left border-collapse">
+            <thead>
+                <tr class="bg-gray-100 border-b">
+                    <th class="p-3 text-xs font-bold">CIUDADANO</th>
+                    <th class="p-3 text-xs font-bold">SECTOR</th>
+                    <th class="p-3 text-xs font-bold">ESTADO</th>
+                    <th class="p-3 text-center text-xs font-bold">UBICACIÓN</th>
+                    <th class="p-3 text-center text-xs font-bold">ACCIONES</th>
+                </tr>
+            </thead>
+            <tbody id="tablaCuerpo"></tbody>
+        </table>
+    `;
+
+    const tbody = document.getElementById('tablaCuerpo');
+    data.forEach(item => {
+        const fila = document.createElement('tr');
+        fila.className = "border-b hover:bg-gray-50";
+        fila.innerHTML = `
+            <td class="p-3 text-sm">${item.nombre_ciudadano || '---'}</td>
+            <td class="p-3 text-sm">${item.sector || '---'}</td>
+            <td class="p-3 text-xs">
+                <span class="px-2 py-1 rounded-full ${item.estado === 'Finalizado' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}">
+                    ${item.estado}
+                </span>
+            </td>
+            <td class="p-3 text-center">
+                <a href="${item.ubicacion}" target="_blank" class="text-xl">📍</a>
+            </td>
+            <td class="p-3 text-center flex gap-2 justify-center">
+                ${item.estado !== 'Finalizado' ? 
+                    `<button onclick="cambiarEstado('${item.id}', 'Finalizado')" class="bg-blue-600 text-white px-2 py-1 rounded text-xs">Resolver</button>` 
+                    : '✅'}
+                <button onclick="eliminarReporte('${item.id}')" class="bg-red-500 text-white px-2 py-1 rounded text-xs">Ignorar</button>
+            </td>
+        `;
+        tbody.appendChild(fila);
     });
 }
 
-async function cambiarEstado(id, nuevoEstado) {
-    const { error } = await _supabase.from('reportes').update({ estado: nuevoEstado }).eq('id', id);
-    if (!error) cargarReportes();
+window.exportarExcel = async function() {
+    const { data, error } = await supabase.from('reportes').select('*').order('created_at', { ascending: false });
+    if (error || !data) return alert("No hay datos");
+
+    let excelCode = '<html><head><meta charset="UTF-8"></head><body><table border="1">';
+    excelCode += '<tr style="background:#eeeeee"><th>CIUDADANO</th><th>SECTOR</th><th>DESCRIPCIÓN</th><th>ESTADO</th><th>MAPA</th><th>FECHA</th></tr>';
+    
+    data.forEach(item => {
+        const linkLimpio = item.ubicacion && item.ubicacion.includes('http') ? `<a href="${item.ubicacion}">Ver Ubicación</a>` : '---';
+        excelCode += `<tr>
+            <td>${item.nombre_ciudadano}</td><td>${item.sector}</td><td>${item.descripcion}</td>
+            <td>${item.estado}</td><td>${linkLimpio}</td><td>${new Date(item.created_at).toLocaleString()}</td>
+        </tr>`;
+    });
+    excelCode += '</table></body></html>';
+
+    const blob = new Blob([excelCode], { type: 'application/vnd.ms-excel' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "Reporte_GAD_LITA.xls"; a.click();
 }
