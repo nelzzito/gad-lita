@@ -8,11 +8,10 @@
     <style>
         body { font-family: sans-serif; margin: 0; padding: 20px; background: #f3f4f6; }
         .container { max-width: 950px; margin: auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        .logo { width: 80px; display: block; margin: 0 auto 10px; }
         h1 { color: #1e40af; text-align: center; margin-bottom: 25px; }
-        label { display: block; margin-top: 15px; font-weight: bold; color: #4b5563; }
+        label { display: block; margin-top: 15px; font-weight: bold; color: #374151; }
         input, textarea { width: 100%; padding: 12px; margin-top: 5px; border: 1px solid #d1d5db; border-radius: 8px; box-sizing: border-box; }
-        #btnEnviar { width: 100%; padding: 15px; margin-top: 25px; background: #2563eb; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: bold; }
+        button#btnEnviar { width: 100%; padding: 15px; margin-top: 25px; background: #2563eb; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: bold; }
         
         #panelAdmin { display: none; margin-top: 40px; border-top: 2px solid #e5e7eb; padding-top: 20px; }
         table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 12px; }
@@ -27,7 +26,7 @@
 </head>
 <body>
 <div class="container">
-    <img src="logo-gad.png" alt="GAD Lita" class="logo">
+    <img src="logo-gad.png" alt="GAD Lita" style="width: 80px; display: block; margin: auto;">
     <h1>Reporte Ciudadano</h1>
     
     <div id="formReporte">
@@ -35,7 +34,7 @@
         <input type="text" id="nombre" placeholder="Nombre completo">
         <label>Sector</label>
         <input type="text" id="sector" placeholder="Barrio o Sector">
-        <label>Descripción del Problema (Detalle)</label>
+        <label>Detalle del Problema</label>
         <textarea id="descripcion" rows="4" placeholder="Describa el inconveniente aquí..."></textarea>
         <button id="btnEnviar" onclick="enviarReporte()">Enviar Reporte con GPS</button>
     </div>
