@@ -156,3 +156,11 @@ window.exportarExcel = async function() {
     const a = document.createElement("a");
     a.href = url; a.download = "Reporte_GAD_LITA.xls"; a.click();
 }
+// PASO D: REGISTRO DEL SERVICE WORKER PARA ACTIVAR EL BOTÓN INSTALAR
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js')
+      .then(reg => console.log('✅ El sistema de instalación está listo:', reg))
+      .catch(err => console.error('❌ Error al preparar la instalación:', err));
+  });
+}
