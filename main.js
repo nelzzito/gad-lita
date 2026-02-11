@@ -23,7 +23,45 @@ async function obtenerLinkMapa() {
     });
 }
 
-// 3. FUNCIONES ADMINISTRATIVAS (Resolver e Ignorar)
+// 3. LÓGICA DE ENVÍO DEL CIUDADANO (CORREGIDA)
+window.enviarReporte = async function() {
+    const nombre = document.getElementById('nombre').value;
+    const sector = document.getElementById('sector').value;
+    const detalle = document.getElementById('detalle').value;
+
+    if (!nombre || !sector || !detalle) {
+        return alert("⚠️ Por favor, llene todos los campos.");
+    }
+
+    const btn = document.querySelector("button[onclick='enviarReporte()']");
+    btn.innerText = "Enviando...";
+    btn.disabled = true;
+
+    const linkGps = await obtenerLinkMapa();
+
+    const { error } = await supabase.from('reportes').insert([{ 
+        nombre_ciudadano: nombre, 
+        sector: sector, 
+        descripcion: detalle,
+        ubicacion: linkGps,
+        estado: 'Pendiente'
+    }]);
+
+    if (error) {
+        alert("❌ Error: " + error.message);
+    } else {
+        alert("✅ Reporte enviado con éxito al GAD Lita.");
+        // Limpiar campos
+        document.getElementById('nombre').value = "";
+        document.getElementById('sector').value = "";
+        document.getElementById('detalle').value = "";
+    }
+    
+    btn.innerText = "Enviar al GAD";
+    btn.disabled = false;
+}
+
+// 4. FUNCIONES ADMINISTRATIVAS (Resolver e Ignorar)
 window.cambiarEstado = async function(id, nuevoEstado) {
     const { error } = await supabase.from('reportes').update({ estado: nuevoEstado }).eq('id', id);
     if (!error) {
@@ -42,29 +80,20 @@ window.eliminarReporte = async function(id) {
     }
 }
 
-// 4. LÓGICA DE ENVÍO DEL CIUDADANO
-window.enviarReporte = async function() {
-    // ... (Tu código de enviarReporte que ya funciona)
-    // Asegúrate de que al final de un envío exitoso llame a actualizarTabla();
-}
-
 // 5. ACCESO Y DIBUJO DE TABLA
 window.verificarAdmin = function() {
     const clave = prompt("Ingrese la clave:");
     if (clave === "LITA2026") {
-        document.getElementById('panelAdmin').style.display = 'block';
+        document.getElementById('panelAdmin').style.setProperty('display', 'block', 'important');
         actualizarTabla();
     }
 }
 
 async function actualizarTabla() {
     const { data, error } = await supabase.from('reportes').select('*').order('created_at', { ascending: false });
-    const cuerpo = document.getElementById('tablaCuerpo');
     const contenedor = document.getElementById('tablaReportes');
     if (error || !contenedor) return;
 
-    // Aquí pegas la estructura de la tabla con las 5 columnas: 
-    // CIUDADANO, SECTOR, ESTADO, UBICACIÓN y ACCIONES
     contenedor.innerHTML = `
         <table class="w-full text-left border-collapse">
             <thead>
@@ -85,69 +114,45 @@ async function actualizarTabla() {
         const fila = document.createElement('tr');
         fila.className = "border-b hover:bg-gray-50";
         fila.innerHTML = `
-            <td class="p-3 text-sm">${item.nombre_ciudadano}</td>
-            <td class="p-3 text-sm">${item.sector}</td>
-            <td class="p-3 text-xs">${item.estado}</td>
+            <td class="p-3 text-sm">${item.nombre_ciudadano || '---'}</td>
+            <td class="p-3 text-sm">${item.sector || '---'}</td>
+            <td class="p-3 text-xs">
+                <span class="px-2 py-1 rounded-full ${item.estado === 'Finalizado' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}">
+                    ${item.estado}
+                </span>
+            </td>
             <td class="p-3 text-center">
                 <a href="${item.ubicacion}" target="_blank" class="text-xl">📍</a>
             </td>
             <td class="p-3 text-center flex gap-2 justify-center">
-                <button onclick="cambiarEstado('${item.id}', 'Finalizado')" class="bg-blue-600 text-white px-2 py-1 rounded text-xs">Resolver</button>
+                ${item.estado !== 'Finalizado' ? 
+                    `<button onclick="cambiarEstado('${item.id}', 'Finalizado')" class="bg-blue-600 text-white px-2 py-1 rounded text-xs">Resolver</button>` 
+                    : '✅'}
                 <button onclick="eliminarReporte('${item.id}')" class="bg-red-500 text-white px-2 py-1 rounded text-xs">Ignorar</button>
             </td>
         `;
         tbody.appendChild(fila);
     });
 }
+
 window.exportarExcel = async function() {
-    // 1. Obtenemos los datos frescos de la base de datos
-    const { data, error } = await supabase
-        .from('reportes')
-        .select('*')
-        .order('created_at', { ascending: false });
+    const { data, error } = await supabase.from('reportes').select('*').order('created_at', { ascending: false });
+    if (error || !data) return alert("No hay datos");
 
-    if (error || !data) return alert("No hay datos para exportar");
-
-    // 2. Iniciamos la construcción del archivo Excel
-    let excelCode = '<html><head><meta charset="UTF-8"></head><body>';
-    excelCode += '<table border="1">';
+    let excelCode = '<html><head><meta charset="UTF-8"></head><body><table border="1">';
+    excelCode += '<tr style="background:#eeeeee"><th>CIUDADANO</th><th>SECTOR</th><th>DESCRIPCIÓN</th><th>ESTADO</th><th>MAPA</th><th>FECHA</th></tr>';
     
-    // Encabezados del reporte
-    excelCode += `
-        <tr style="background-color: #f3f4f6;">
-            <th>CIUDADANO</th>
-            <th>SECTOR</th>
-            <th>DESCRIPCIÓN</th>
-            <th>ESTADO</th>
-            <th>MAPA (LINK)</th>
-            <th>FECHA DE REPORTE</th>
-        </tr>`;
-    
-    // 3. Llenamos las filas
     data.forEach(item => {
-        // Aquí ocurre la magia: Si hay ubicación, creamos un link con el texto "Ver Ubicación"
-        const linkLimpio = item.ubicacion && item.ubicacion.includes('http') 
-            ? `<a href="${item.ubicacion}">Ver Ubicación</a>` 
-            : 'No disponible';
-
-        excelCode += `
-            <tr>
-                <td>${item.nombre_ciudadano || '---'}</td>
-                <td>${item.sector || '---'}</td>
-                <td>${item.descripcion || '---'}</td>
-                <td>${item.estado}</td>
-                <td>${linkLimpio}</td>
-                <td>${new Date(item.created_at).toLocaleString()}</td>
-            </tr>`;
+        const linkLimpio = item.ubicacion && item.ubicacion.includes('http') ? `<a href="${item.ubicacion}">Ver Ubicación</a>` : '---';
+        excelCode += `<tr>
+            <td>${item.nombre_ciudadano}</td><td>${item.sector}</td><td>${item.descripcion}</td>
+            <td>${item.estado}</td><td>${linkLimpio}</td><td>${new Date(item.created_at).toLocaleString()}</td>
+        </tr>`;
     });
-
     excelCode += '</table></body></html>';
 
-    // 4. Descarga del archivo
     const blob = new Blob([excelCode], { type: 'application/vnd.ms-excel' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url;
-    a.download = `Reporte_GAD_LITA_${new Date().toLocaleDateString()}.xls`;
-    a.click();
+    a.href = url; a.download = "Reporte_GAD_LITA.xls"; a.click();
 }
