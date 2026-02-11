@@ -8,22 +8,18 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         body { font-family: sans-serif; margin: 0; padding: 20px; background: #f3f4f6; }
-        .container { max-width: 600px; margin: auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .container { max-width: 700px; margin: auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
         h1 { color: #1e40af; text-align: center; }
         label { display: block; margin-top: 10px; font-weight: bold; }
         input, textarea { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; }
         button { width: 100%; padding: 12px; margin-top: 20px; background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; }
         
-        #panelAdmin { display: none; margin-top: 40px; border-top: 2px solid #ccc; }
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 11px; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        #panelAdmin { display: none; margin-top: 40px; border-top: 3px solid #1e40af; padding-top: 20px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 12px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        th { background: #eff6ff; color: #1e40af; }
         
-        /* BOTÓN DE ACCESO VISIBLE ABAJO DEL ENVIAR */
-        .btn-admin-visible { 
-            display: block; width: 100px; margin: 20px auto 0; padding: 5px;
-            background: #e5e7eb; color: #9ca3af; text-align: center; 
-            border-radius: 4px; cursor: pointer; font-size: 12px; text-decoration: none;
-        }
+        .btn-admin-v2 { display: block; width: 150px; margin: 40px auto 0; padding: 8px; background: #cbd5e1; color: #475569; text-align: center; border-radius: 5px; cursor: pointer; font-size: 12px; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -34,17 +30,14 @@
     
     <div id="formReporte">
         <label>Nombre</label>
-        <input type="text" id="nombre" placeholder="Tu nombre">
-
+        <input type="text" id="nombre" placeholder="Nombre completo">
         <label>Sector</label>
-        <input type="text" id="sector" placeholder="Escribe tu sector">
-
-        <label>Descripción</label>
-        <textarea id="descripcion" rows="4" placeholder="Detalle el problema..."></textarea>
-
-        <button id="btnEnviar" onclick="enviarReporte()">Enviar Reporte con GPS</button>
+        <input type="text" id="sector" placeholder="Su barrio o sector">
+        <label>Descripción del Problema</label>
+        <textarea id="descripcion" rows="4" placeholder="Detalle qué sucede..."></textarea>
+        <button id="btnEnviar" onclick="enviarReporte()">Enviar al GAD</button>
         
-        <div class="btn-admin-visible" onclick="accesoAdmin()">Panel Admin</div>
+        <div class="btn-admin-v2" onclick="accesoAdmin()">⚙️ Acceso GAD</div>
     </div>
 
     <div id="panelAdmin">
@@ -54,13 +47,12 @@
                 <tr>
                     <th>CIUDADANO</th>
                     <th>SECTOR</th>
-                    <th>DETALLE</th>
-                    <th>MAPA</th>
+                    <th>DETALLE</th> <th>MAPA</th>
                 </tr>
             </thead>
-            <tbody id="listaReportes"></tbody>
+            <tbody id="listaReportes">
+                </tbody>
         </table>
-        <button onclick="location.reload()" style="background:#6b7280; margin-top:10px;">Volver al Formulario</button>
     </div>
 </div>
 

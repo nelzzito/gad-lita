@@ -1,31 +1,25 @@
-// 1. CONEXIÓN ÚNICA A SUPABASE
 const _supabase = supabase.createClient('https://vclmcliofzjofzllvytj.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZjbG1jbGlvZnpqb2Z6bGx2eXRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzgxMTM5NjMsImV4cCI6MjA1MzY4OTk2M30.6_tUisI56r3mR_z098i7-nU-P1fG_y2q1r-P1fG_y2q');
 
-// 2. FUNCIÓN PARA EL BOTÓN DE ACCESO (ADMIN)
 function accesoAdmin() {
     const clave = prompt("Seguridad GAD Lita - Clave:");
     if (clave === "LITA2026") {
         document.getElementById('formReporte').style.display = 'none';
         document.getElementById('panelAdmin').style.display = 'block';
-        cargarReportes(); // Carga los datos solo si la clave es correcta
+        cargarReportes();
     } else {
         alert("Clave incorrecta");
     }
 }
 
-// 3. FUNCIÓN PARA ENVIAR REPORTE CIUDADANO
 async function enviarReporte() {
     const btn = document.getElementById('btnEnviar');
     const nom = document.getElementById('nombre').value;
     const sec = document.getElementById('sector').value;
     const des = document.getElementById('descripcion').value;
 
-    if (!nom || !sec || !des) {
-        alert("⚠️ Llena todos los campos");
-        return;
-    }
+    if (!nom || !sec || !des) return alert("Complete todos los campos");
 
-    btn.innerText = "Obteniendo GPS...";
+    btn.innerText = "Enviando...";
     btn.disabled = true;
 
     navigator.geolocation.getCurrentPosition(async (pos) => {
@@ -37,44 +31,33 @@ async function enviarReporte() {
             estado: 'Pendiente'
         }]);
 
-        if (error) {
-            alert("Error al guardar: " + error.message);
-        } else {
-            alert("✅ Reporte enviado al GAD con éxito");
-            location.reload(); 
-        }
+        if (error) alert("Error: " + error.message);
+        else { alert("✅ Reporte enviado"); location.reload(); }
+    }, () => {
+        alert("Active el GPS");
         btn.disabled = false;
-        btn.innerText = "Enviar Reporte con GPS";
-    }, (err) => {
-        alert("📍 Debes activar el GPS del celular");
-        btn.disabled = false;
-        btn.innerText = "Enviar Reporte con GPS";
+        btn.innerText = "Enviar al GAD";
     });
 }
 
-// 4. FUNCIÓN PARA CARGAR LOS REPORTES EN LA TABLA
 async function cargarReportes() {
     const lista = document.getElementById('listaReportes');
-    lista.innerHTML = "<tr><td colspan='4'>Cargando datos del GAD...</td></tr>";
+    lista.innerHTML = "<tr><td colspan='4'>Cargando datos...</td></tr>";
     
-    const { data, error } = await _supabase
-        .from('reportes')
-        .select('*')
-        .order('created_at', { ascending: false });
+    const { data, error } = await _supabase.from('reportes').select('*').order('created_at', { ascending: false });
 
     if (error) {
-        lista.innerHTML = "<tr><td colspan='4'>Error al conectar con la base</td></tr>";
+        lista.innerHTML = "<tr><td colspan='4'>Error de conexión</td></tr>";
         return;
     }
 
-    lista.innerHTML = ""; // Limpiar el mensaje de carga
+    lista.innerHTML = "";
     data.forEach(r => {
-        lista.innerHTML += `
-            <tr>
-                <td>${r.nombre_ciudadano}</td>
-                <td>${r.sector}</td>
-                <td>${r.descripcion}</td>
-                <td><a href="${r.ubicacion}" target="_blank">📍 Ver</a></td>
-            </tr>`;
+        lista.innerHTML += `<tr>
+            <td>${r.nombre_ciudadano}</td>
+            <td>${r.sector}</td>
+            <td>${r.descripcion || 'Sin detalle'}</td>
+            <td><a href="${r.ubicacion}" target="_blank">📍 Ver</a></td>
+        </tr>`;
     });
 }
