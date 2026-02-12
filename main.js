@@ -47,7 +47,7 @@ window.enviarReporte = async function() {
         descripcion: detalle,
         ubicacion: linkGps,
         estado: 'Pendiente',
-        fecha_local: new Date().toISOString() // Añadimos fecha para control offline
+        // fecha_local: new Date().toISOString() // Añadimos fecha para control offline
     };
 
     if (navigator.onLine) {
@@ -219,16 +219,11 @@ window.addEventListener('online', async () => {
     let pendientes = JSON.parse(localStorage.getItem('reportes_pendientes')) || [];
     
     if (pendientes.length > 0) {
-        console.log("¡Internet recuperado! Sincronizando reportes...");
-        
-        for (let reporte of pendientes) {
-            // Reutilizamos nuestra función de envío a Supabase
-            const { error } = await supabase.from('reportes').insert([reporte]);
-            if (error) console.error("Error al sincronizar:", error);
+        for (let reporte de pendientes) {
+            // Envío directo y limpio
+            await supabase.from('reportes').insert([reporte]);
         }
-        
-        // Limpiamos la memoria local una vez enviado todo
         localStorage.removeItem('reportes_pendientes');
-        alert("✅ ¡Sincronización exitosa! Tus reportes pendientes han sido enviados al GAD.");
+        alert("✅ Conexión recuperada. Los reportes pendientes se han sincronizado.");
     }
 });
