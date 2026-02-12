@@ -100,6 +100,7 @@ async function actualizarTabla() {
                 <tr class="bg-gray-100 border-b">
                     <th class="p-3 text-xs font-bold">CIUDADANO</th>
                     <th class="p-3 text-xs font-bold">SECTOR</th>
+                    <th class="p-3 text-xs font-bold">DETALLE</th>
                     <th class="p-3 text-xs font-bold">ESTADO</th>
                     <th class="p-3 text-center text-xs font-bold">UBICACIÓN</th>
                     <th class="p-3 text-center text-xs font-bold">ACCIONES</th>
@@ -116,6 +117,7 @@ async function actualizarTabla() {
         fila.innerHTML = `
             <td class="p-3 text-sm">${item.nombre_ciudadano || '---'}</td>
             <td class="p-3 text-sm">${item.sector || '---'}</td>
+            <td class="p-3 text-sm">${item.descripcion || '---'}</td>
             <td class="p-3 text-xs">
                 <span class="px-2 py-1 rounded-full ${item.estado === 'Finalizado' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}">
                     ${item.estado}
@@ -124,12 +126,18 @@ async function actualizarTabla() {
             <td class="p-3 text-center">
                 <a href="${item.ubicacion}" target="_blank" class="text-xl">📍</a>
             </td>
-            <td class="p-3 text-center flex gap-2 justify-center">
-                ${item.estado !== 'Finalizado' ? 
-                    `<button onclick="cambiarEstado('${item.id}', 'Finalizado')" class="bg-blue-600 text-white px-2 py-1 rounded text-xs">Resolver</button>` 
-                    : '✅'}
-                <button onclick="eliminarReporte('${item.id}')" class="bg-red-500 text-white px-2 py-1 rounded text-xs">Ignorar</button>
-            </td>
+           <td class="p-3 text-center flex gap-2 justify-center">
+                        ${item.estado !== 'Finalizado' ? `
+                            <button onclick="cambiarEstado('${item.id}', 'Finalizado')" style="color: #2563eb; font-weight: bold;">
+                                Finalizar 
+                            </button>
+                            <button onclick="eliminarReporte('${item.id}')" style="color: #dc2626; font-weight: bold;">
+                                Ignorar 
+                            </button>
+                        ` : `
+                            <span style="color: #16a34a; font-weight: bold;">Completado ✅</span>
+                        `}
+                    </td>
         `;
         tbody.appendChild(fila);
     });
