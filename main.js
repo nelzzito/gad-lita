@@ -24,6 +24,7 @@ async function obtenerLinkMapa() {
 }
 
 // 3. LÓGICA DE ENVÍO DEL CIUDADANO (CORREGIDA)
+// 1. FUNCIÓN PRINCIPAL (La que decide: ¿Hay internet o no?)
 window.enviarReporte = async function() {
     const nombre = document.getElementById('nombre').value;
     const sector = document.getElementById('sector').value;
@@ -34,33 +35,53 @@ window.enviarReporte = async function() {
     }
 
     const btn = document.querySelector("button[onclick='enviarReporte()']");
-    btn.innerText = "Enviando...";
+    btn.innerText = "Procesando...";
     btn.disabled = true;
 
+    // Obtenemos el GPS (esto funciona offline si el GPS del celular está activo)
     const linkGps = await obtenerLinkMapa();
 
-    const { error } = await supabase.from('reportes').insert([{ 
-        nombre_ciudadano: nombre, 
-        sector: sector, 
+    const reporte = {
+        nombre_ciudadano: nombre,
+        sector: sector,
         descripcion: detalle,
         ubicacion: linkGps,
-        estado: 'Pendiente'
-    }]);
+        estado: 'Pendiente',
+        fecha_local: new Date().toISOString() // Añadimos fecha para control offline
+    };
+
+    if (navigator.onLine) {
+        // SI HAY INTERNET: Ejecutamos el envío normal
+        await enviarASupabase(reporte, btn);
+    } else {
+        // SI NO HAY INTERNET: Guardamos en la memoria del celular
+        guardarEnLocal(reporte);
+        limpiarCampos();
+        btn.innerText = "Enviar al GAD";
+        btn.disabled = false;
+    }
+};
+
+// 2. FUNCIÓN DE ENVÍO (Solo se encarga de hablar con Supabase)
+async function enviarASupabase(datos, btn) {
+    const { error } = await supabase.from('reportes').insert([datos]);
 
     if (error) {
         alert("❌ Error: " + error.message);
     } else {
         alert("✅ Reporte enviado con éxito al GAD Lita.");
-        // Limpiar campos
-        document.getElementById('nombre').value = "";
-        document.getElementById('sector').value = "";
-        document.getElementById('detalle').value = "";
+        limpiarCampos();
     }
-    
     btn.innerText = "Enviar al GAD";
     btn.disabled = false;
 }
 
+// 3. FUNCIÓN AUXILIAR PARA LIMPIAR (Para no repetir código)
+function limpiarCampos() {
+    document.getElementById('nombre').value = "";
+    document.getElementById('sector').value = "";
+    document.getElementById('detalle').value = "";
+}
 // 4. FUNCIONES ADMINISTRATIVAS (Resolver e Ignorar)
 window.cambiarEstado = async function(id, nuevoEstado) {
     const { error } = await supabase.from('reportes').update({ estado: nuevoEstado }).eq('id', id);
@@ -179,3 +200,35 @@ if ('serviceWorker' in navigator) {
       .catch(err => console.error('❌ Error al preparar la instalación:', err));
   });
 }
+// A. GUARDA EL REPORTE EN EL TELÉFONO/PC
+function guardarEnLocal(datos) {
+    // 1. Buscamos si ya hay otros reportes guardados
+    let pendientes = JSON.parse(localStorage.getItem('reportes_pendientes')) || [];
+    
+    // 2. Agregamos el nuevo reporte a la lista
+    pendientes.push(datos);
+    
+    // 3. Lo guardamos de nuevo en la memoria del dispositivo
+    localStorage.setItem('reportes_pendientes', JSON.stringify(pendientes));
+    
+    alert("📡 Estás sin conexión. El reporte se guardó en tu dispositivo y se enviará automáticamente cuando tengas internet.");
+}
+
+// B. ENVÍO AUTOMÁTICO AL RECUPERAR SEÑAL
+window.addEventListener('online', async () => {
+    let pendientes = JSON.parse(localStorage.getItem('reportes_pendientes')) || [];
+    
+    if (pendientes.length > 0) {
+        console.log("¡Internet recuperado! Sincronizando reportes...");
+        
+        for (let reporte of pendientes) {
+            // Reutilizamos nuestra función de envío a Supabase
+            const { error } = await supabase.from('reportes').insert([reporte]);
+            if (error) console.error("Error al sincronizar:", error);
+        }
+        
+        // Limpiamos la memoria local una vez enviado todo
+        localStorage.removeItem('reportes_pendientes');
+        alert("✅ ¡Sincronización exitosa! Tus reportes pendientes han sido enviados al GAD.");
+    }
+});
