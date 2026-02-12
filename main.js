@@ -175,14 +175,33 @@ function guardarEnLocal(datos) {
 }
 
 window.addEventListener('online', async () => {
-    let pendientes = JSON.parse(localStorage.getItem('reportes_pendientes')) || [];
-    if (pendientes.length > 0) {
-        for (let reporte of pendientes) {
-            await supabase.from('reportes').insert([reporte]);
+    // Esperamos 3 segundos para que la conexión sea real y estable
+    console.log("Internet detectado. Estabilizando conexión...");
+    
+    setTimeout(async () => {
+        let pendientes = JSON.parse(localStorage.getItem('reportes_pendientes')) || [];
+        
+        if (pendientes.length > 0) {
+            try {
+                for (let reporte of pendientes) {
+                    // Intento de envío a Supabase
+                    const { error } = await supabase.from('reportes').insert([reporte]);
+                    if (error) throw error;
+                }
+                
+                // Si todos se enviaron bien, limpiamos la memoria local
+                localStorage.removeItem('reportes_pendientes');
+                alert("✅ ¡Conexión recuperada! Los reportes guardados se han enviado con éxito.");
+                
+                // Refrescamos la tabla si el administrador tiene el panel abierto
+                if (typeof actualizarTabla === "function") actualizarTabla();
+                
+            } catch (err) {
+                console.error("Error en sincronización:", err);
+                alert("⚠️ El internet volvió, pero Supabase aún no responde. Se intentará enviar más tarde.");
+            }
         }
-        localStorage.removeItem('reportes_pendientes');
-        alert("✅ Conexión recuperada. Reportes sincronizados.");
-    }
+    }, 3000); 
 });
 
 if ('serviceWorker' in navigator) {
