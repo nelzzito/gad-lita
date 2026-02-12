@@ -1,10 +1,10 @@
-// 1. CONFIGURACIÓN DE SUPABASE
+// 1. IMPORTACIÓN Y CONFIGURACIÓN (Verificado)
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
 const supabaseUrl = 'https://hnqshnbdndsvurffrpjs.supabase.co'
 const supabaseKey = 'sb_publishable_wgDPu5O49WPdWsm_xE_jmA_hJ4PoEXp'
 const supabase = createClient(supabaseUrl, supabaseKey)
 
-// 2. OBTENER GPS (Promesa robusta con tiempo de espera)
+// 2. FUNCIONES DE APOYO (GPS)
 async function obtenerLinkMapa() {
     return new Promise((resolve) => {
         if (!navigator.geolocation) {
@@ -14,7 +14,7 @@ async function obtenerLinkMapa() {
                 (pos) => {
                     const lat = pos.coords.latitude;
                     const lon = pos.coords.longitude;
-                    resolve(`https://www.google.com/maps?q=${lat},${lon}`);
+                    resolve(`https://maps.google.com/?q=${lat},${lon}`);
                 },
                 () => resolve("No proporcionada"),
                 { timeout: 8000 }
@@ -23,125 +23,170 @@ async function obtenerLinkMapa() {
     });
 }
 
-// 3. FUNCIÓN PRINCIPAL DE ENVÍO (Lógica de la Versión Plus)
-window.enviarReporte = async function() {
-    // Captura de elementos
-    const nombreInput = document.getElementById('nombre');
-    const sectorInput = document.getElementById('sector');
-    const detalleInput = document.getElementById('detalle');
-    const btn = document.querySelector("button[onclick='enviarReporte()']");
+function limpiarCampos() {
+    document.getElementById('nombre').value = "";
+    document.getElementById('sector').value = "";
+    document.getElementById('detalle').value = "";
+}
 
-    // Validación rigurosa
-    if (!nombreInput.value.trim() || !sectorInput.value.trim() || !detalleInput.value.trim()) {
-        return alert("⚠️ Por favor, llene todos los campos obligatorios.");
+// 3. LÓGICA DE ENVÍO DEL CIUDADANO
+window.enviarReporte = async function() {
+    const nombre = document.getElementById('nombre').value;
+    const sector = document.getElementById('sector').value;
+    const detalle = document.getElementById('detalle').value;
+
+    if (!nombre || !sector || !detalle) {
+        return alert("⚠️ Por favor, llene todos los campos.");
     }
 
-    // Estado visual del botón
-    const textoOriginal = btn.innerText;
+    const btn = document.querySelector("button[onclick='enviarReporte()']");
     btn.innerText = "Procesando...";
     btn.disabled = true;
 
     try {
         const linkGps = await obtenerLinkMapa();
-
         const reporte = {
-            nombre_ciudadano: nombreInput.value,
-            sector: sectorInput.value,
-            descripcion: detalleInput.value,
+            nombre_ciudadano: nombre,
+            sector: sector,
+            descripcion: detalle,
             ubicacion: linkGps,
             estado: 'Pendiente'
         };
 
         if (navigator.onLine) {
-            // RUTA ONLINE
             const { error } = await supabase.from('reportes').insert([reporte]);
             if (error) throw error;
             alert("✅ Reporte enviado con éxito al GAD Lita.");
-            limpiarCampos(nombreInput, sectorInput, detalleInput);
+            limpiarCampos();
         } else {
-            // RUTA OFFLINE
             guardarEnLocal(reporte);
-            alert("📡 Sin conexión a internet. El reporte se guardó en este teléfono y se enviará apenas recuperes señal.");
-            limpiarCampos(nombreInput, sectorInput, detalleInput);
+            limpiarCampos();
         }
     } catch (err) {
-        console.error("Error en el proceso:", err);
-        alert("❌ Error: " + (err.message || "No se pudo enviar el reporte. Intente de nuevo."));
+        alert("❌ Error: " + err.message);
     } finally {
-        // Restauración del botón (Siempre ocurre, pase lo que pase)
-        btn.innerText = textoOriginal;
+        btn.innerText = "Enviar al GAD";
         btn.disabled = false;
     }
 };
 
-// 4. FUNCIONES AUXILIARES
-function limpiarCampos(n, s, d) {
-    n.value = "";
-    s.value = "";
-    d.value = "";
-}
-
-function guardarEnLocal(datos) {
-    let pendientes = JSON.parse(localStorage.getItem('reportes_pendientes')) || [];
-    pendientes.push(datos);
-    localStorage.setItem('reportes_pendientes', JSON.stringify(pendientes));
-}
-
-// 5. SINCRONIZACIÓN AUTOMÁTICA (Al recuperar internet)
-window.addEventListener('online', async () => {
-    let pendientes = JSON.parse(localStorage.getItem('reportes_pendientes')) || [];
-    if (pendientes.length > 0) {
-        console.log("Detectada conexión. Sincronizando datos pendientes...");
-        for (let reporte of pendientes) {
-            await supabase.from('reportes').insert([reporte]);
-        }
-        localStorage.removeItem('reportes_pendientes');
-        alert("✅ Conexión recuperada. Se han sincronizado los reportes que estaban pendientes.");
-    }
-});
-
-// 6. ADMINISTRACIÓN (Mantenimiento de funciones actuales)
+// 4. FUNCIONES ADMINISTRATIVAS (Restauradas)
 window.verificarAdmin = function() {
-    const clave = prompt("Ingrese la clave administrativa:");
+    const clave = prompt("Ingrese la clave:");
     if (clave === "LITA2026") {
         document.getElementById('panelAdmin').style.setProperty('display', 'block', 'important');
-        actualizarTabla();
+        actualizarTabla(); // Carga la tabla inmediatamente
+    } else {
+        alert("Clave incorrecta");
     }
-};
+}
 
 async function actualizarTabla() {
     const { data, error } = await supabase.from('reportes').select('*').order('created_at', { ascending: false });
-    const tbody = document.getElementById('tablaCuerpo');
-    if (error || !tbody) return;
+    const contenedor = document.getElementById('tablaReportes');
+    if (error || !contenedor) return;
 
-    tbody.innerHTML = "";
+    // Dibujar estructura de tabla
+    contenedor.innerHTML = `
+        <table class="w-full text-left border-collapse">
+            <thead>
+                <tr class="bg-gray-100 border-b">
+                    <th class="p-3 text-xs font-bold">CIUDADANO</th>
+                    <th class="p-3 text-xs font-bold">SECTOR</th>
+                    <th class="p-3 text-xs font-bold">DETALLE</th>
+                    <th class="p-3 text-xs font-bold">ESTADO</th>
+                    <th class="p-3 text-center text-xs font-bold">UBICACIÓN</th>
+                    <th class="p-3 text-center text-xs font-bold">ACCIONES</th>
+                </tr>
+            </thead>
+            <tbody id="tablaCuerpo"></tbody>
+        </table>
+    `;
+
+    const tbody = document.getElementById('tablaCuerpo');
     data.forEach(item => {
         const fila = document.createElement('tr');
         fila.className = "border-b hover:bg-gray-50";
         fila.innerHTML = `
-            <td class="p-3 text-sm">${item.nombre_ciudadano}</td>
-            <td class="p-3 text-sm">${item.sector}</td>
-            <td class="p-3 text-sm">${item.descripcion}</td>
+            <td class="p-3 text-sm">${item.nombre_ciudadano || '---'}</td>
+            <td class="p-3 text-sm">${item.sector || '---'}</td>
+            <td class="p-3 text-sm">${item.descripcion || '---'}</td>
             <td class="p-3 text-xs">
                 <span class="px-2 py-1 rounded-full ${item.estado === 'Finalizado' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}">
                     ${item.estado}
                 </span>
             </td>
             <td class="p-3 text-center">
-                <a href="${item.ubicacion}" target="_blank">📍</a>
+                <a href="${item.ubicacion}" target="_blank" class="text-xl">📍</a>
             </td>
             <td class="p-3 text-center flex gap-2 justify-center">
-                <button onclick="cambiarEstado('${item.id}', 'Finalizado')" style="color:#2563eb">Finalizar</button>
-                <button onclick="eliminarReporte('${item.id}')" style="color:#dc2626">Ignorar</button>
+                ${item.estado !== 'Finalizado' ? `
+                    <button onclick="cambiarEstado('${item.id}', 'Finalizado')" style="color: #2563eb; font-weight: bold; cursor:pointer;">Finalizar</button>
+                    <button onclick="eliminarReporte('${item.id}')" style="color: #dc2626; font-weight: bold; cursor:pointer; margin-left:10px;">Ignorar</button>
+                ` : `<span style="color: #16a34a; font-weight: bold;">Completado ✅</span>`}
             </td>
         `;
         tbody.appendChild(fila);
     });
 }
 
-// 7. OTROS (Exportación y Service Worker)
+window.cambiarEstado = async function(id, nuevoEstado) {
+    const { error } = await supabase.from('reportes').update({ estado: nuevoEstado }).eq('id', id);
+    if (!error) {
+        alert("✅ Reporte Actualizado.");
+        actualizarTabla(); 
+    }
+}
+
+window.eliminarReporte = async function(id) {
+    if (confirm("⚠️ ¿Estás seguro de IGNORAR este reporte?")) {
+        const { error } = await supabase.from('reportes').delete().eq('id', id);
+        if (!error) {
+            alert("🗑️ Reporte eliminado.");
+            actualizarTabla();
+        }
+    }
+}
+
+// 5. EXPORTACIÓN EXCEL
+window.exportarExcel = async function() {
+    const { data, error } = await supabase.from('reportes').select('*').order('created_at', { ascending: false });
+    if (error || !data) return alert("No hay datos");
+
+    let excelCode = '<html><head><meta charset="UTF-8"></head><body><table border="1">';
+    excelCode += '<tr style="background:#eeeeee"><th>CIUDADANO</th><th>SECTOR</th><th>DESCRIPCIÓN</th><th>ESTADO</th><th>FECHA</th></tr>';
+    data.forEach(item => {
+        excelCode += `<tr><td>${item.nombre_ciudadano}</td><td>${item.sector}</td><td>${item.descripcion}</td><td>${item.estado}</td><td>${new Date(item.created_at).toLocaleString()}</td></tr>`;
+    });
+    excelCode += '</table></body></html>';
+
+    const blob = new Blob([excelCode], { type: 'application/vnd.ms-excel' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "Reporte_GAD_LITA.xls"; a.click();
+}
+
+// 6. MODO OFFLINE Y SERVICE WORKER (Corregido)
+function guardarEnLocal(datos) {
+    let pendientes = JSON.parse(localStorage.getItem('reportes_pendientes')) || [];
+    pendientes.push(datos);
+    localStorage.setItem('reportes_pendientes', JSON.stringify(pendientes));
+    alert("📡 Sin conexión. Guardado en el dispositivo.");
+}
+
+window.addEventListener('online', async () => {
+    let pendientes = JSON.parse(localStorage.getItem('reportes_pendientes')) || [];
+    if (pendientes.length > 0) {
+        for (let reporte of pendientes) {
+            await supabase.from('reportes').insert([reporte]);
+        }
+        localStorage.removeItem('reportes_pendientes');
+        alert("✅ Conexión recuperada. Reportes sincronizados.");
+    }
+});
+
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js').catch(e => console.error("SW Error:", e));
+        navigator.serviceWorker.register('./sw.js').catch(err => console.error(err));
     });
 }
