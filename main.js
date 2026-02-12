@@ -174,35 +174,35 @@ function guardarEnLocal(datos) {
     alert("📡 Sin conexión. Guardado en el dispositivo.");
 }
 
-window.addEventListener('online', async () => {
-    // Esperamos 3 segundos para que la conexión sea real y estable
-    console.log("Internet detectado. Estabilizando conexión...");
+const procesarPendientes = async () => {
+    if (!navigator.onLine) return;
+
+    let pendientes = JSON.parse(localStorage.getItem('reportes_pendientes')) || [];
+    if (pendientes.length === 0) return;
+
+    console.log("Detectados reportes pendientes. Sincronizando...");
     
-    setTimeout(async () => {
-        let pendientes = JSON.parse(localStorage.getItem('reportes_pendientes')) || [];
-        
-        if (pendientes.length > 0) {
-            try {
-                for (let reporte of pendientes) {
-                    // Intento de envío a Supabase
-                    const { error } = await supabase.from('reportes').insert([reporte]);
-                    if (error) throw error;
-                }
-                
-                // Si todos se enviaron bien, limpiamos la memoria local
-                localStorage.removeItem('reportes_pendientes');
-                alert("✅ ¡Conexión recuperada! Los reportes guardados se han enviado con éxito.");
-                
-                // Refrescamos la tabla si el administrador tiene el panel abierto
-                if (typeof actualizarTabla === "function") actualizarTabla();
-                
-            } catch (err) {
-                console.error("Error en sincronización:", err);
-                alert("⚠️ El internet volvió, pero Supabase aún no responde. Se intentará enviar más tarde.");
-            }
+    try {
+        for (let i = 0; i < pendientes.length; i++) {
+            const { error } = await supabase.from('reportes').insert([pendientes[i]]);
+            if (error) throw error;
         }
-    }, 3000); 
+        
+        localStorage.removeItem('reportes_pendientes');
+        alert("✅ ¡Conexión recuperada! Los reportes guardados se han enviado con éxito.");
+        if (typeof actualizarTabla === "function") actualizarTabla();
+    } catch (err) {
+        console.error("Error en sincronización:", err);
+    }
+};
+
+// Escuchar cuando vuelve el internet (con retraso de estabilidad)
+window.addEventListener('online', () => {
+    setTimeout(procesarPendientes, 3000);
 });
+
+// Intentar procesar apenas cargue la página por si ya hay internet
+window.addEventListener('load', procesarPendientes);
 
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
