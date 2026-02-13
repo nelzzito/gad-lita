@@ -1,211 +1,196 @@
-// 1. IMPORTACIÓN Y CONFIGURACIÓN (Verificado)
+// 1. CONFIGURACIÓN SUPABASE
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
 const supabaseUrl = 'https://hnqshnbdndsvurffrpjs.supabase.co'
 const supabaseKey = 'sb_publishable_wgDPu5O49WPdWsm_xE_jmA_hJ4PoEXp'
 const supabase = createClient(supabaseUrl, supabaseKey)
 
-// 2. FUNCIONES DE APOYO (GPS)
+// 2. GPS
 async function obtenerLinkMapa() {
     return new Promise((resolve) => {
-        if (!navigator.geolocation) {
-            resolve("No soportado");
-        } else {
+        if (!navigator.geolocation) resolve("No soportado");
+        else {
             navigator.geolocation.getCurrentPosition(
-                (pos) => {
-                    const lat = pos.coords.latitude;
-                    const lon = pos.coords.longitude;
-                    resolve(`https://maps.google.com/?q=${lat},${lon}`);
-                },
-                () => resolve("No proporcionada"),
-                { timeout: 8000 }
+                (p) => resolve(`https://www.google.com/maps?q=${p.coords.latitude},${p.coords.longitude}`),
+                () => resolve("No proporcionada"), { timeout: 8000 }
             );
         }
     });
 }
 
-function limpiarCampos() {
-    document.getElementById('nombre').value = "";
-    document.getElementById('sector').value = "";
-    document.getElementById('detalle').value = "";
-}
-
-// 3. LÓGICA DE ENVÍO DEL CIUDADANO
+// 3. ENVÍO DEL CIUDADANO
 window.enviarReporte = async function() {
-    const nombre = document.getElementById('nombre').value;
-    const sector = document.getElementById('sector').value;
-    const detalle = document.getElementById('detalle').value;
-
-    if (!nombre || !sector || !detalle) {
-        return alert("⚠️ Por favor, llene todos los campos.");
-    }
-
+    const n = document.getElementById('nombre').value;
+    const s = document.getElementById('sector').value;
+    const d = document.getElementById('detalle').value;
+    if (!n || !s || !d) return alert("⚠️ Llene todos los campos");
     const btn = document.querySelector("button[onclick='enviarReporte()']");
-    btn.innerText = "Procesando...";
-    btn.disabled = true;
-
+    if(btn) { btn.disabled = true; btn.innerText = "Enviando..."; }
     try {
-        const linkGps = await obtenerLinkMapa();
-        const reporte = {
-            nombre_ciudadano: nombre,
-            sector: sector,
-            descripcion: detalle,
-            ubicacion: linkGps,
-            estado: 'Pendiente'
-        };
-
-        if (navigator.onLine) {
-            const { error } = await supabase.from('reportes').insert([reporte]);
-            if (error) throw error;
-            alert("✅ Reporte enviado con éxito al GAD Lita.");
-            limpiarCampos();
-        } else {
-            guardarEnLocal(reporte);
-            limpiarCampos();
-        }
-    } catch (err) {
-        alert("❌ Error: " + err.message);
-    } finally {
-        btn.innerText = "Enviar al GAD";
-        btn.disabled = false;
+        const gps = await obtenerLinkMapa();
+        const { error } = await supabase.from('reportes').insert([
+            { nombre_ciudadano: n, sector: s, descripcion: d, ubicacion: gps, estado: 'Pendiente' }
+        ]);
+        if (error) throw error;
+        alert("✅ Reporte enviado con éxito");
+        location.reload(); 
+    } catch (e) {
+        alert("Error: " + e.message);
+        if(btn) { btn.disabled = false; btn.innerText = "Enviar al GAD"; }
     }
 };
 
-// 4. FUNCIONES ADMINISTRATIVAS (Restauradas)
+// 4. ADMINISTRACIÓN
 window.verificarAdmin = function() {
-    const clave = prompt("Ingrese la clave:");
+    const clave = prompt("Clave de acceso:");
     if (clave === "LITA2026") {
-        document.getElementById('panelAdmin').style.setProperty('display', 'block', 'important');
-        actualizarTabla(); // Carga la tabla inmediatamente
-    } else {
-        alert("Clave incorrecta");
-    }
-}
+        document.getElementById('panelAdmin').classList.remove('hidden');
+        if (document.getElementById('btnAccesoAdmin')) document.getElementById('btnAccesoAdmin').classList.add('hidden');
+        actualizarTabla();
+    } else { alert("Clave incorrecta"); }
+};
 
+// 5. TABLA WEB
 async function actualizarTabla() {
     const { data, error } = await supabase.from('reportes').select('*').order('created_at', { ascending: false });
-    const contenedor = document.getElementById('tablaReportes');
-    if (error || !contenedor) return;
+    const cont = document.getElementById('tablaReportes');
+    if (error || !cont) return;
 
-    // Dibujar estructura de tabla
-    contenedor.innerHTML = `
-        <table class="w-full text-left border-collapse">
-            <thead>
-                <tr class="bg-gray-100 border-b">
-                    <th class="p-3 text-xs font-bold">CIUDADANO</th>
-                    <th class="p-3 text-xs font-bold">SECTOR</th>
-                    <th class="p-3 text-xs font-bold">DETALLE</th>
-                    <th class="p-3 text-xs font-bold">ESTADO</th>
-                    <th class="p-3 text-center text-xs font-bold">UBICACIÓN</th>
-                    <th class="p-3 text-center text-xs font-bold">ACCIONES</th>
+    const panelAdmin = document.getElementById('panelAdmin');
+    const cabecera = panelAdmin.querySelector('.flex.justify-between.items-center');
+    
+    if (cabecera) {
+        cabecera.className = "flex flex-col w-full mb-6";
+        cabecera.innerHTML = `
+            <h2 class="text-2xl font-black text-blue-900 text-center w-full mb-2 uppercase">GESTIÓN DE REPORTES</h2>
+            <div class="flex justify-end w-full">
+                <button id="btnExportar" class="bg-green-700 hover:bg-green-800 text-white px-5 py-2 rounded text-[10px] font-bold shadow-sm transition-all uppercase">
+                    REPORTE EXCEL
+                </button>
+            </div>
+        `;
+        document.getElementById('btnExportar').onclick = () => window.exportarExcel();
+    }
+
+    cont.innerHTML = `
+        <table class="w-full text-left text-[10px] border-collapse">
+            <thead class="bg-gray-200 text-gray-800 uppercase font-black border-b border-gray-400">
+                <tr>
+                    <th class="p-2">FECHA</th>
+                    <th class="p-2">CIUDADANO</th>
+                    <th class="p-2">SECTOR</th>
+                    <th class="p-2">DETALLE</th>
+                    <th class="p-2 text-center">ESTADO</th>
+                    <th class="p-2 text-center">ACCIONES</th>
                 </tr>
             </thead>
-            <tbody id="tablaCuerpo"></tbody>
-        </table>
-    `;
-
-    const tbody = document.getElementById('tablaCuerpo');
-    data.forEach(item => {
-        const fila = document.createElement('tr');
-        fila.className = "border-b hover:bg-gray-50";
-        fila.innerHTML = `
-            <td class="p-3 text-sm">${item.nombre_ciudadano || '---'}</td>
-            <td class="p-3 text-sm">${item.sector || '---'}</td>
-            <td class="p-3 text-sm">${item.descripcion || '---'}</td>
-            <td class="p-3 text-xs">
-                <span class="px-2 py-1 rounded-full ${item.estado === 'Finalizado' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}">
-                    ${item.estado}
-                </span>
-            </td>
-            <td class="p-3 text-center">
-                <a href="${item.ubicacion}" target="_blank" class="text-xl">📍</a>
-            </td>
-            <td class="p-3 text-center flex gap-2 justify-center">
-                ${item.estado !== 'Finalizado' ? `
-                    <button onclick="cambiarEstado('${item.id}', 'Finalizado')" style="color: #2563eb; font-weight: bold; cursor:pointer;">Finalizar</button>
-                    <button onclick="eliminarReporte('${item.id}')" style="color: #dc2626; font-weight: bold; cursor:pointer; margin-left:10px;">Ignorar</button>
-                ` : `<span style="color: #16a34a; font-weight: bold;">Completado ✅</span>`}
-            </td>
-        `;
-        tbody.appendChild(fila);
-    });
+            <tbody>
+                ${data.map(item => `
+                    <tr class="border-b border-gray-200">
+                        <td class="p-2 text-gray-600 whitespace-nowrap">${new Date(item.created_at).toLocaleDateString()}</td>
+                        <td class="p-2 font-bold text-blue-900">${item.nombre_ciudadano}</td>
+                        <td class="p-2 text-gray-700 uppercase font-semibold">${item.sector}</td>
+                        <td class="p-2 text-gray-500 italic max-w-[150px] truncate">${item.descripcion}</td>
+                        <td class="p-2 text-center">
+                            <span class="px-2 py-0.5 rounded shadow-sm font-black text-[8px] border ${
+                                item.estado === 'Finalizado' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-yellow-50 text-yellow-800 border-yellow-200'
+                            }">${item.estado}</span>
+                        </td>
+                        <td class="p-2">
+                            <div class="flex justify-center gap-1">
+                                ${item.estado !== 'Finalizado' ? `
+                                    <button onclick="window.cambiarEstado('${item.id}')" class="bg-green-600 text-white font-bold text-[8px] py-1 px-2 rounded">FINALIZAR</button>
+                                    <button onclick="window.eliminarReporte('${item.id}')" class="bg-red-600 text-white font-bold text-[8px] py-1 px-2 rounded">IGNORAR</button>
+                                ` : '✅'}
+                            </div>
+                        </td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>`;
 }
 
-window.cambiarEstado = async function(id, nuevoEstado) {
-    const { error } = await supabase.from('reportes').update({ estado: nuevoEstado }).eq('id', id);
-    if (!error) {
-        alert("✅ Reporte Actualizado.");
-        actualizarTabla(); 
-    }
-}
+// 6. ACCIONES
+window.cambiarEstado = async (id) => {
+    await supabase.from('reportes').update({ estado: 'Finalizado' }).eq('id', id);
+    actualizarTabla();
+};
 
-window.eliminarReporte = async function(id) {
-    if (confirm("⚠️ ¿Estás seguro de IGNORAR este reporte?")) {
-        const { error } = await supabase.from('reportes').delete().eq('id', id);
-        if (!error) {
-            alert("🗑️ Reporte eliminado.");
-            actualizarTabla();
-        }
-    }
-}
-
-// 5. EXPORTACIÓN EXCEL
-window.exportarExcel = async function() {
-    const { data, error } = await supabase.from('reportes').select('*').order('created_at', { ascending: false });
-    if (error || !data) return alert("No hay datos");
-
-    let excelCode = '<html><head><meta charset="UTF-8"></head><body><table border="1">';
-    excelCode += '<tr style="background:#eeeeee"><th>CIUDADANO</th><th>SECTOR</th><th>DESCRIPCIÓN</th><th>ESTADO</th><th>FECHA</th></tr>';
-    data.forEach(item => {
-        excelCode += `<tr><td>${item.nombre_ciudadano}</td><td>${item.sector}</td><td>${item.descripcion}</td><td>${item.estado}</td><td>${new Date(item.created_at).toLocaleString()}</td></tr>`;
-    });
-    excelCode += '</table></body></html>';
-
-    const blob = new Blob([excelCode], { type: 'application/vnd.ms-excel' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = "Reporte_GAD_LITA.xls"; a.click();
-}
-
-// 6. MODO OFFLINE Y SERVICE WORKER (Corregido)
-function guardarEnLocal(datos) {
-    let pendientes = JSON.parse(localStorage.getItem('reportes_pendientes')) || [];
-    pendientes.push(datos);
-    localStorage.setItem('reportes_pendientes', JSON.stringify(pendientes));
-    alert("📡 Sin conexión. Guardado en el dispositivo.");
-}
-
-const procesarPendientes = async () => {
-    if (!navigator.onLine) return;
-
-    let pendientes = JSON.parse(localStorage.getItem('reportes_pendientes')) || [];
-    if (pendientes.length === 0) return;
-
-    console.log("Detectados reportes pendientes. Sincronizando...");
-    
-    try {
-        for (let i = 0; i < pendientes.length; i++) {
-            const { error } = await supabase.from('reportes').insert([pendientes[i]]);
-            if (error) throw error;
-        }
-        
-        localStorage.removeItem('reportes_pendientes');
-        alert("✅ ¡Conexión recuperada! Los reportes guardados se han enviado con éxito.");
-        if (typeof actualizarTabla === "function") actualizarTabla();
-    } catch (err) {
-        console.error("Error en sincronización:", err);
+window.eliminarReporte = async (id) => {
+    if(confirm("¿Eliminar reporte?")) {
+        await supabase.from('reportes').delete().eq('id', id);
+        actualizarTabla();
     }
 };
 
-// Escuchar cuando vuelve el internet (con retraso de estabilidad)
-window.addEventListener('online', () => {
-    setTimeout(procesarPendientes, 3000);
-});
+// 7. EXPORTAR EXCEL CON COLUMNA DE UBICACIÓN
+window.exportarExcel = async function() {
+    const { data, error } = await supabase.from('reportes').select('*').order('created_at', { ascending: false });
+    if (error) return alert("Error al obtener datos");
 
-// Intentar procesar apenas cargue la página por si ya hay internet
-window.addEventListener('load', procesarPendientes);
-
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js').catch(err => console.error(err));
+    const ahora = new Date().toLocaleString();
+    let xmlRows = "";
+    data.forEach(r => {
+        const f = new Date(r.created_at).toLocaleString();
+        xmlRows += `
+        <Row>
+            <Cell ss:StyleID="sDatos"><Data ss:Type="String">${f}</Data></Cell>
+            <Cell ss:StyleID="sDatos"><Data ss:Type="String">${r.nombre_ciudadano}</Data></Cell>
+            <Cell ss:StyleID="sDatos"><Data ss:Type="String">${r.sector}</Data></Cell>
+            <Cell ss:StyleID="sDatos"><Data ss:Type="String">${r.descripcion}</Data></Cell>
+            <Cell ss:StyleID="sDatos"><Data ss:Type="String">${r.estado}</Data></Cell>
+            <Cell ss:StyleID="sDatos" ss:HRef="${r.ubicacion}"><Data ss:Type="String">VER MAPA</Data></Cell>
+        </Row>`;
     });
-}
+
+    const excelTemplate = `<?xml version="1.0"?>
+    <?mso-application progid="Excel.Sheet"?>
+    <Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+     <Styles>
+      <Style ss:ID="sTitulo">
+       <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+       <Font ss:FontName="Arial" ss:Size="14" ss:Bold="1" ss:Color="#228B22"/>
+      </Style>
+      <Style ss:ID="sHeader">
+       <Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/></Borders>
+       <Font ss:Bold="1"/><Interior ss:Color="#D3D3D3" ss:Pattern="Solid"/>
+      </Style>
+      <Style ss:ID="sDatos">
+       <Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/></Borders>
+      </Style>
+      <Style ss:ID="sFooter">
+       <Font ss:Size="9" ss:Italic="1" ss:Color="#666666"/>
+      </Style>
+     </Styles>
+     <Worksheet ss:Name="Reportes">
+      <Table ss:ExpandedColumnCount="6">
+       <Column ss:Width="110"/><Column ss:Width="150"/><Column ss:Width="120"/><Column ss:Width="250"/><Column ss:Width="80"/><Column ss:Width="100"/>
+       <Row ss:Height="30">
+        <Cell ss:MergeAcross="5" ss:StyleID="sTitulo"><Data ss:Type="String">🛡️ REPORTE DE ATENCIÓN DE INCIDENTES GAD LITA</Data></Cell>
+       </Row>
+       <Row ss:Height="20">
+        <Cell ss:StyleID="sHeader"><Data ss:Type="String">FECHA / HORA</Data></Cell>
+        <Cell ss:StyleID="sHeader"><Data ss:Type="String">CIUDADANO</Data></Cell>
+        <Cell ss:StyleID="sHeader"><Data ss:Type="String">SECTOR</Data></Cell>
+        <Cell ss:StyleID="sHeader"><Data ss:Type="String">DETALLE</Data></Cell>
+        <Cell ss:StyleID="sHeader"><Data ss:Type="String">ESTADO</Data></Cell>
+        <Cell ss:StyleID="sHeader"><Data ss:Type="String">UBICACIÓN GPS</Data></Cell>
+       </Row>
+       ${xmlRows}
+       <Row></Row>
+       <Row>
+        <Cell ss:MergeAcross="5" ss:StyleID="sFooter"><Data ss:Type="String">Reporte generado el: ${ahora}</Data></Cell>
+       </Row>
+       <Row>
+        <Cell ss:MergeAcross="5" ss:StyleID="sFooter"><Data ss:Type="String">Generado por: Administrador GAD Lita</Data></Cell>
+       </Row>
+      </Table>
+     </Worksheet>
+    </Workbook>`;
+
+    const blob = new Blob([excelTemplate], { type: "application/vnd.ms-excel" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `Reporte_Lita_${ahora.replace(/[/ :]/g, '_')}.xls`;
+    link.click();
+};

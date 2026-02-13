@@ -1,108 +1,62 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#1e40af">
-<link rel="apple-touch-icon" href="logo.png">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GAD Lita Digital</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#1e40af">
     <link rel="icon" type="image/png" href="logo.png">
+    <link rel="apple-touch-icon" href="logo.png">
+    <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-   <style>
-    body { background-color: #f3f4f6; }
-    
-    .punto-acceso { 
-        /* LA PROPIEDAD QUE FALTA: */
-        display: block !important; 
-        
-        /* ESTILO IGUAL AL BOTÓN DE CERRAR SESIÓN: */
-        color: #9ca3af !important;   /* Gris claro (text-gray-400) */
-        font-size: 12px !important;  /* Tamaño pequeño (text-xs) */
-        text-decoration: underline;  /* Subrayado */
-        text-align: center; 
-        margin-top: 50px; 
-        cursor: pointer; 
-        user-select: none;
-        width: 100%;                 /* Asegura que ocupe el ancho para centrarse */
-    }
-
-    /* Efecto al pasar el mouse como el otro botón */
-    .punto-acceso:hover {
-        color: #4b5563 !important;   /* Gris más oscuro */
-    }
-</style>
+    <style>
+        body { background-color: #f0f2f5; font-family: sans-serif; }
+        .card-container { max-width: 800px; margin: auto; background: white; border-radius: 15px; border: 1px solid #ddd; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        /* El punto de acceso sutil */
+        .punto-acceso { 
+            display: block; 
+            color: #ccc; 
+            font-size: 10px; 
+            text-align: center; 
+            margin-top: 30px; 
+            padding: 10px; 
+            cursor: pointer; 
+            border-top: 1px solid #eee;
+        }
+        .hidden { display: none !important; }
+    </style>
 </head>
-<body class="p-4 md:p-10">
-
-    <div class="max-w-4xl mx-auto bg-white p-6 md:p-8 rounded-xl shadow-lg border border-gray-200">
+<body class="p-4">
+    <div class="card-container p-6">
         <div class="text-center mb-8">
-            <img src="logo.png" alt="GAD Lita" class="w-40 mx-auto mb-2">
+            <img src="logo.png" alt="GAD Lita" class="w-24 mx-auto mb-2">
             <h1 class="text-2xl font-bold text-blue-900">GAD PARROQUIAL LITA</h1>
-            <p class="text-gray-500 text-sm italic">Reporte Ciudadano de Incidentes</p>
+            <p class="text-gray-500 text-xs uppercase">Reporte de Incidentes</p>
         </div>
 
-        <div id="formReporte" class="space-y-5">
-            <div>
-                <label class="block text-sm font-bold text-gray-700 mb-1">Nombre del Ciudadano</label>
-                <input type="text" id="nombre" 
-                       class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition">
-            </div>
-
-            <div>
-                <label class="block text-sm font-bold text-gray-700 mb-1">Sector </label>
-                <input type="text" id="sector" 
-                       class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition">
-            </div>
-
-            <div>
-                <label class="block text-sm font-bold text-gray-700 mb-1">Detalle del Problema</label>
-                <textarea id="detalle" rows="4" placeholder="Describa el inconveniente..." 
-                          class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"></textarea>
-            </div>
-
-            <button onclick="enviarReporte()" 
-              class="w-full bg-blue-700 hover:bg-blue-800 text-white font-bold py-4 rounded-lg shadow-md transition-all active:scale-95 flex items-center justify-center gap-2">
-                    <i data-lucide="send"></i> Enviar al GAD
+        <div id="formReporte" class="space-y-4">
+            <input type="text" id="nombre" placeholder="Nombre completo" class="w-full p-3 border rounded-lg">
+            <input type="text" id="sector" placeholder="Sector / Barrio" class="w-full p-3 border rounded-lg">
+            <textarea id="detalle" rows="3" placeholder="Descripción del problema" class="w-full p-3 border rounded-lg"></textarea>
+            <button onclick="enviarReporte()" class="w-full bg-blue-700 text-white font-bold py-3 rounded-lg shadow-md hover:bg-blue-800 transition">
+                Enviar al GAD
             </button>
         </div>
 
-        <div id="panelAdmin" class="hidden mt-10 border-t pt-8">
-            <div class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
-                <h2 class="text-xl font-bold text-gray-800 flex items-center gap-2">
-                    <span>📊</span> Gestión de Reportes
-                </h2>
-                <button onclick="exportarExcel()" 
-                        class="bg-green-600 hover:bg-green-700 text-white px-5 py-2 rounded-lg text-sm font-bold shadow transition">
-                    📥 Descargar Excel
-                </button>
+        <div id="panelAdmin" class="hidden mt-8 border-t pt-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold">Gestión de Reportes</h2>
+                <button onclick="exportarExcel()" class="bg-green-600 text-white px-4 py-2 rounded text-xs font-bold">Excel</button>
             </div>
-
-            <div id="tablaReportes" class="overflow-x-auto rounded-lg border border-gray-200 shadow-sm bg-white">
+            <div id="tablaReportes" class="overflow-x-auto border rounded-lg bg-white">
                 </div>
-
-            <button onclick="location.reload()" 
-                    class="mt-8 text-gray-400 hover:text-gray-600 text-xs block mx-auto underline transition">
-                Cerrar Sesión Administrativa
-            </button>
+            <button onclick="location.reload()" class="mt-6 text-gray-400 text-xs block mx-auto underline">Cerrar Sesión</button>
         </div>
 
-        <div class="punto-acceso" onclick="verificarAdmin()">.</div>
+        <div id="btnAccesoAdmin" class="punto-acceso" onclick="verificarAdmin()">Panel de Control .</div>
     </div>
 
     <script type="module" src="main.js"></script>
-<script>
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./sw.js')
-        .then(reg => console.log('✅ Instalador activado'))
-        .catch(err => console.log('❌ Error en instalador', err));
-    });
-  }
-</script>
-<script>
-    lucide.createIcons();
-</script>
 </body>
 </html>
