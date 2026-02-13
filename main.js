@@ -17,25 +17,35 @@ async function obtenerLinkMapa() {
     });
 }
 
-// 3. ENVÍO DEL CIUDADANO
+// 3. ENVÍO DEL CIUDADANO (CORREGIDO PARA OFFLINE)
 window.enviarReporte = async function() {
     const n = document.getElementById('nombre').value;
     const s = document.getElementById('sector').value;
     const d = document.getElementById('detalle').value;
+    
     if (!n || !s || !d) return alert("⚠️ Llene todos los campos");
+    
     const btn = document.querySelector("button[onclick='enviarReporte()']");
     if(btn) { btn.disabled = true; btn.innerText = "Enviando..."; }
+
+    const gps = await obtenerLinkMapa();
+    const nuevoReporte = { nombre_ciudadano: n, sector: s, descripcion: d, ubicacion: gps, estado: 'Pendiente' };
+
     try {
-        const gps = await obtenerLinkMapa();
-        const { error } = await supabase.from('reportes').insert([
-            { nombre_ciudadano: n, sector: s, descripcion: d, ubicacion: gps, estado: 'Pendiente' }
-        ]);
+        const { error } = await supabase.from('reportes').insert([nuevoReporte]);
         if (error) throw error;
+        
         alert("✅ Reporte enviado con éxito");
         location.reload(); 
     } catch (e) {
-        alert("Error: " + e.message);
-        if(btn) { btn.disabled = false; btn.innerText = "Enviar al GAD"; }
+        // SI FALLA EL INTERNET, GUARDAMOS EN EL TELÉFONO
+        console.log("Fallo de red, guardando localmente...");
+        let pendientes = JSON.parse(localStorage.getItem('reportes_pendientes') || "[]");
+        pendientes.push(nuevoReporte);
+        localStorage.setItem('reportes_pendientes', JSON.stringify(pendientes));
+
+        alert("📡 Sin conexión. El reporte se guardó en el teléfono y se enviará automáticamente cuando tengas internet.");
+        location.reload();
     }
 };
 
@@ -194,3 +204,23 @@ window.exportarExcel = async function() {
     link.download = `Reporte_Lita_${ahora.replace(/[/ :]/g, '_')}.xls`;
     link.click();
 };
+// 8. SINCRONIZADOR AUTOMÁTICO
+async function sincronizarPendientes() {
+    if (!navigator.onLine) return;
+    const pendientes = JSON.parse(localStorage.getItem('reportes_pendientes') || "[]");
+    if (pendientes.length === 0) return;
+
+    console.log(`Sincronizando ${pendientes.length} reportes...`);
+    for (let i = 0; i < pendientes.length; i++) {
+        const { error } = await supabase.from('reportes').insert([pendientes[i]]);
+        if (!error) {
+            pendientes.splice(i, 1);
+            i--;
+        }
+    }
+    localStorage.setItem('reportes_pendientes', JSON.stringify(pendientes));
+}
+
+// Intentar sincronizar al cargar y al recuperar conexión
+window.addEventListener('online', sincronizarPendientes);
+sincronizarPendientes();
