@@ -13,7 +13,6 @@ if (fotoInput) {
         const file = e.target.files[0];
         if (!file) return;
         
-        // CONTROL 1: Máximo 3 fotos al seleccionar
         if (listaFotos.length >= 3) {
             alert("⚠️ Máximo 3 fotos permitidas por reporte.");
             e.target.value = ""; 
@@ -90,12 +89,9 @@ window.enviarReporte = async function() {
         return alert("⚠️ Llene los campos obligatorios (Nombre, Sector y Detalle).");
     }
 
-    // CONTROL 3: Obligatoriedad de Fotos (Mínimo 1, Máximo 3)
+    // CONTROL 3: Obligatoriedad de Fotos (Mínimo 1)
     if (listaFotos.length === 0) {
         return alert("⚠️ ERROR: Debe incluir al menos una foto como evidencia.");
-    }
-    if (listaFotos.length > 3) {
-        return alert("⚠️ ERROR: No puede enviar más de 3 fotos.");
     }
 
     // --- CASO: SIN INTERNET ---
@@ -106,7 +102,7 @@ window.enviarReporte = async function() {
             ubicacion: "Pendiente (Offline)", foto_url: "", estado: 'Pendiente' 
         });
         localStorage.setItem('reportes_pendientes', JSON.stringify(pendientes));
-        alert("📡 Estás sin conexión. El texto se guardó para enviarse luego. Las fotos no se guardan en modo offline.");
+        alert("📡 Estás sin conexión. El texto se guardó para enviarse luego. Las fotos deben subirse con internet.");
         location.reload();
         return;
     }
@@ -117,7 +113,6 @@ window.enviarReporte = async function() {
 
     try {
         let urlFotos = "";
-        // Ya sabemos que listaFotos.length es entre 1 y 3 por las validaciones anteriores
         const urls = await Promise.all(listaFotos.map(f => procesarYSubir(f)));
         urlFotos = urls.join(', ');
         
@@ -140,7 +135,7 @@ window.enviarReporte = async function() {
     }
 };
 
-// 4. ADMINISTRACIÓN Y TABLA (SIN CAMBIOS)
+// 4. ADMINISTRACIÓN Y TABLA (RECUPERADA)
 window.verificarAdmin = function() {
     if (prompt("Clave:") === "LITA2026") {
         document.getElementById('panelAdmin').classList.remove('hidden');
@@ -160,6 +155,7 @@ async function actualizarTabla() {
                 <tr>
                     <th class="p-2">FECHA</th><th class="p-2">CIUDADANO</th><th class="p-2">SECTOR</th>
                     <th class="p-2 text-center">FOTOS</th><th class="p-2 text-center">MAPA</th>
+                    <th class="p-2">DETALLE</th><th class="p-2 text-center">ESTADO</th>
                     <th class="p-2 text-center">ACCIONES</th>
                 </tr>
             </thead>
@@ -176,6 +172,8 @@ async function actualizarTabla() {
                         <td class="p-2 text-center text-base">
                             ${item.ubicacion?.includes('http') ? `<a href="${item.ubicacion}" target="_blank">📍</a>` : '—'}
                         </td>
+                        <td class="p-2 italic truncate max-w-[100px]">${item.descripcion}</td>
+                        <td class="p-2 text-center font-bold text-blue-600">${item.estado}</td>
                         <td class="p-2 text-center">
                             <div class="flex justify-center gap-1">
                                 ${item.estado !== 'Finalizado' ? `
