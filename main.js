@@ -204,23 +204,45 @@ window.exportarExcel = async function() {
     link.download = `Reporte_Lita_${ahora.replace(/[/ :]/g, '_')}.xls`;
     link.click();
 };
-// 8. SINCRONIZADOR AUTOMÁTICO
+// 8. SINCRONIZADOR AUTOMÁTICO (CORREGIDO CON AVISO)
 async function sincronizarPendientes() {
     if (!navigator.onLine) return;
-    const pendientes = JSON.parse(localStorage.getItem('reportes_pendientes') || "[]");
+    
+    let pendientes = JSON.parse(localStorage.getItem('reportes_pendientes') || "[]");
     if (pendientes.length === 0) return;
 
     console.log(`Sincronizando ${pendientes.length} reportes...`);
+    let subidosConExito = 0;
+    const totalInicial = pendientes.length;
+
     for (let i = 0; i < pendientes.length; i++) {
-        const { error } = await supabase.from('reportes').insert([pendientes[i]]);
-        if (!error) {
-            pendientes.splice(i, 1);
-            i--;
+        try {
+            const { error } = await supabase.from('reportes').insert([pendientes[i]]);
+            if (!error) {
+                subidosConExito++;
+                pendientes.splice(i, 1);
+                i--; // Ajustar índice por el elemento eliminado
+            }
+        } catch (e) {
+            console.error("Error en sincronización individual:", e);
         }
     }
+
+    // Guardar lo que quedó pendiente (si hubo errores)
     localStorage.setItem('reportes_pendientes', JSON.stringify(pendientes));
+
+    // MOSTRAR AVISO SI SE SUBIÓ ALGO
+    if (subidosConExito > 0) {
+        alert(`✅ ¡Conexión restaurada! Se han sincronizado ${subidosConExito} reporte(s) pendiente(s) con éxito.`);
+        // Si el panel de admin está abierto, actualizar la tabla para ver los nuevos datos
+        if (!document.getElementById('panelAdmin').classList.contains('hidden')) {
+            actualizarTabla();
+        }
+    }
 }
 
 // Intentar sincronizar al cargar y al recuperar conexión
 window.addEventListener('online', sincronizarPendientes);
+// También ejecutamos al cargar por si se abrió la app ya con internet
 sincronizarPendientes();
+
