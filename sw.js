@@ -1,26 +1,29 @@
-const CACHE_NAME = 'gad-lita-plus-v1';
+const CACHE_NAME = 'gad-lita-plus-v2'; // Cambié a V2 para forzar al celular a actualizarse
 
-// Archivos críticos que se guardarán para funcionar sin internet
 const assets = [
   './',
   './index.html',
   './main.js',
   './style.css',
-  './logo.png', // Asegúrate de que el nombre coincida con tu archivo
-  './manifest.json'
+  './logo.png',
+  './manifest.json',
+  // LIBRERÍAS EXTERNAS (Crucial para que no se dañe el diseño)
+  'https://cdn.tailwindcss.com',
+  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
 ];
 
-// 1. INSTALACIÓN: Guarda los archivos en la memoria del celular/PC
+// 1. INSTALACIÓN
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
-      console.log('Cache abierto: Guardando archivos para modo offline');
+      console.log('Cache actualizado: Guardando diseño y librerías');
       return cache.addAll(assets);
     })
   );
+  self.skipWaiting(); // Obliga al nuevo Service Worker a activarse de inmediato
 });
 
-// 2. ACTIVACIÓN: Limpia versiones viejas de la app
+// 2. ACTIVACIÓN
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(keys => {
@@ -31,19 +34,26 @@ self.addEventListener('activate', event => {
   );
 });
 
-// 3. ESTRATEGIA DE CARGA: ¿De dónde saco la información?
+// 3. ESTRATEGIA DE CARGA
 self.addEventListener('fetch', event => {
-  // EXCEPCIÓN: Si la petición es para Supabase, NO usar caché (dejar que main.js lo maneje)
-  if (event.request.url.includes('supabase.co')) {
-    return;
-  }
+  // Ignorar peticiones de subida de datos a Supabase (eso lo maneja el main.js)
+  if (event.request.method !== 'GET') return;
 
   event.respondWith(
     caches.match(event.request).then(response => {
-      // Si está en caché, lo devuelve. Si no, lo busca en internet.
-      return response || fetch(event.request).catch(() => {
-        // Si falla internet y no está en caché (ej. una imagen externa), no hace nada
-        console.log("Archivo no encontrado en caché y no hay internet.");
+      // Devuelve lo que hay en memoria, si no está, va a internet
+      return response || fetch(event.request).then(fetchRes => {
+        return caches.open(CACHE_NAME).then(cache => {
+          // Si es un recurso nuevo que no estaba en la lista, lo guarda para la próxima
+          if (event.request.url.includes('cdn') || event.request.url.includes('googleapis')) {
+             cache.put(event.request.url, fetchRes.clone());
+          }
+          return fetchRes;
+        });
+      }).catch(() => {
+        if (event.request.mode === 'navigate') {
+          return caches.match('./index.html');
+        }
       });
     })
   );

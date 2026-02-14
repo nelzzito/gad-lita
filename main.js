@@ -73,7 +73,7 @@ async function obtenerLinkMapa() {
         if (!navigator.geolocation) resolve("No soportado");
         navigator.geolocation.getCurrentPosition(
             (p) => resolve(`https://www.google.com/maps?q=${p.coords.latitude},${p.coords.longitude}`),
-            () => resolve("No proporcionada"), { timeout: 5000 }
+            () => resolve("Ubicación no proporcionada"), { timeout: 5000 }
         );
     });
 }
@@ -84,25 +84,29 @@ window.enviarReporte = async function() {
     const s = document.getElementById('sector').value;
     const d = document.getElementById('detalle').value;
     
-    // CONTROL 2: Validación de Campos de Texto
+    // CONTROL DE CAMPOS VACÍOS
     if (!n || !s || !d) {
         return alert("⚠️ Llene los campos obligatorios (Nombre, Sector y Detalle).");
     }
 
-    // CONTROL 3: Obligatoriedad de Fotos (Mínimo 1)
+    // CONTROL OBLIGATORIO DE FOTOS (Mínimo 1)
     if (listaFotos.length === 0) {
-        return alert("⚠️ ERROR: Debe incluir al menos una foto como evidencia.");
+        return alert("⚠️ ERROR: Es obligatorio subir al menos una foto para enviar el reporte.");
     }
 
     // --- CASO: SIN INTERNET ---
     if (!navigator.onLine) {
         let pendientes = JSON.parse(localStorage.getItem('reportes_pendientes') || "[]");
         pendientes.push({ 
-            nombre_ciudadano: n, sector: s, descripcion: d, 
-            ubicacion: "Pendiente (Offline)", foto_url: "", estado: 'Pendiente' 
+            nombre_ciudadano: n, 
+            sector: s, 
+            descripcion: d, 
+            ubicacion: "Offline (Sin GPS)", 
+            foto_url: "", 
+            estado: 'Pendiente' 
         });
         localStorage.setItem('reportes_pendientes', JSON.stringify(pendientes));
-        alert("📡 Estás sin conexión. El texto se guardó para enviarse luego. Las fotos deben subirse con internet.");
+        alert("📡 MODO OFFLINE: Los datos de texto han sido guardados. Se enviarán al GAD cuando recuperes la señal.");
         location.reload();
         return;
     }
@@ -112,17 +116,21 @@ window.enviarReporte = async function() {
     btn.innerText = "Procesando evidencias... ⏳";
 
     try {
-        let urlFotos = "";
+        // Subida de fotos
         const urls = await Promise.all(listaFotos.map(f => procesarYSubir(f)));
-        urlFotos = urls.join(', ');
+        const urlFotos = urls.join(', ');
         
         btn.innerText = "Ubicando... 📍";
         const gps = await obtenerLinkMapa();
         
         btn.innerText = "Enviando... 🛡️";
         const { error } = await supabase.from('reportes').insert([{ 
-            nombre_ciudadano: n, sector: s, descripcion: d, 
-            ubicacion: gps, foto_url: urlFotos, estado: 'Pendiente' 
+            nombre_ciudadano: n, 
+            sector: s, 
+            descripcion: d, 
+            ubicacion: gps, 
+            foto_url: urlFotos, 
+            estado: 'Pendiente' 
         }]);
 
         if (error) throw error;
@@ -135,7 +143,7 @@ window.enviarReporte = async function() {
     }
 };
 
-// 4. ADMINISTRACIÓN Y TABLA (RECUPERADA)
+// 4. ADMINISTRACIÓN Y TABLA (RECUPERADA Y COMPLETA)
 window.verificarAdmin = function() {
     if (prompt("Clave:") === "LITA2026") {
         document.getElementById('panelAdmin').classList.remove('hidden');
@@ -153,9 +161,13 @@ async function actualizarTabla() {
         <table class="w-full text-left text-[10px] border-collapse">
             <thead class="bg-gray-200 text-gray-800 uppercase font-black border-b border-gray-400">
                 <tr>
-                    <th class="p-2">FECHA</th><th class="p-2">CIUDADANO</th><th class="p-2">SECTOR</th>
-                    <th class="p-2 text-center">FOTOS</th><th class="p-2 text-center">MAPA</th>
-                    <th class="p-2">DETALLE</th><th class="p-2 text-center">ESTADO</th>
+                    <th class="p-2">FECHA</th>
+                    <th class="p-2">CIUDADANO</th>
+                    <th class="p-2">SECTOR</th>
+                    <th class="p-2 text-center">FOTOS</th>
+                    <th class="p-2 text-center">MAPA</th>
+                    <th class="p-2">DETALLE</th>
+                    <th class="p-2 text-center">ESTADO</th>
                     <th class="p-2 text-center">ACCIONES</th>
                 </tr>
             </thead>
