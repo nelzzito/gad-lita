@@ -4,18 +4,70 @@ const supabaseUrl = 'https://hnqshnbdndsvurffrpjs.supabase.co'
 const supabaseKey = 'sb_publishable_wgDPu5O49WPdWsm_xE_jmA_hJ4PoEXp'
 const supabase = createClient(supabaseUrl, supabaseKey)
 
-// --- NUEVA FUNCIÓN: SUBIDA DE FOTO AL STORAGE ---
+let listaFotos = []; // Almacén temporal de archivos
+
+// --- LÓGICA DE FOTOS (AÑADIR Y BORRAR) ---
+const fotoInput = document.getElementById('fotoInput');
+if (fotoInput) {
+    fotoInput.addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        if (listaFotos.length >= 3) {
+            alert("⚠️ Máximo 3 fotos por reporte.");
+            return;
+        }
+
+        listaFotos.push(file);
+        actualizarMiniaturas();
+        e.target.value = ""; // Reset para permitir subir la misma foto si se borra
+    });
+}
+
+function actualizarMiniaturas() {
+    const cont = document.getElementById('previsualizacion');
+    const btnCapturar = document.getElementById('btnCapturar');
+    if (!cont) return;
+    
+    cont.innerHTML = "";
+    listaFotos.forEach((foto, index) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const div = document.createElement('div');
+            div.className = "relative h-20 w-full";
+            div.innerHTML = `
+                <img src="${e.target.result}" class="h-full w-full object-cover rounded-lg border border-blue-200 shadow-sm">
+                <button onclick="quitarFoto(${index})" class="absolute -top-2 -right-2 bg-red-600 text-white rounded-full w-5 h-5 text-[10px] font-bold flex items-center justify-center shadow-lg border border-white">X</button>
+            `;
+            cont.appendChild(div);
+        };
+        reader.readAsDataURL(foto);
+    });
+
+    if (btnCapturar) {
+        btnCapturar.style.display = listaFotos.length >= 3 ? 'none' : 'flex';
+    }
+}
+
+window.quitarFoto = function(index) {
+    listaFotos.splice(index, 1);
+    actualizarMiniaturas();
+};
+
+// --- SUBIDA AL STORAGE ---
 async function subirFoto(archivo) {
     const nombreArchivo = `${Date.now()}_${archivo.name}`;
     const { data, error } = await supabase.storage
         .from('fotos_reportes')
         .upload(nombreArchivo, archivo);
-    if (error) throw new Error("Error al subir imagen");
+    
+    if (error) throw new Error("Error al subir una de las imágenes");
+    
     const { data: urlData } = supabase.storage.from('fotos_reportes').getPublicUrl(nombreArchivo);
     return urlData.publicUrl;
 }
 
-// 2. GPS (MANTENIDO)
+// 2. GPS
 async function obtenerLinkMapa() {
     return new Promise((resolve) => {
         if (!navigator.geolocation) resolve("No soportado");
@@ -28,23 +80,24 @@ async function obtenerLinkMapa() {
     });
 }
 
-// 3. ENVÍO DEL CIUDADANO (ACTUALIZADO CON FOTO)
+// 3. ENVÍO DEL CIUDADANO
 window.enviarReporte = async function() {
     const n = document.getElementById('nombre').value;
     const s = document.getElementById('sector').value;
     const d = document.getElementById('detalle').value;
-    const fotoFile = document.getElementById('foto').files[0]; // Captura el archivo
     
-    if (!n || !s || !d || !fotoFile) return alert("⚠️ Llene todos los campos e incluya la foto");
-    
+    if (!n || !s || !d || listaFotos.length === 0) {
+        return alert("⚠️ Complete todos los campos e incluya al menos una foto.");
+    }
+
     const btn = document.querySelector("button[onclick='enviarReporte()']");
-    if(btn) { btn.disabled = true; btn.innerText = "Subiendo Evidencia..."; }
+    if(btn) { btn.disabled = true; btn.innerText = "Subiendo Evidencias... ⏳"; }
 
     try {
-        // 1. Subir foto primero
-        const urlFoto = await subirFoto(fotoFile);
+        // Subir todas las fotos en paralelo
+        const subidas = listaFotos.map(file => subirFoto(file));
+        const urlsFinales = await Promise.all(subidas);
         
-        // 2. Obtener GPS
         const gps = await obtenerLinkMapa();
         
         const nuevoReporte = { 
@@ -52,27 +105,22 @@ window.enviarReporte = async function() {
             sector: s, 
             descripcion: d, 
             ubicacion: gps, 
-            foto_url: urlFoto, // Nueva columna
+            foto_url: urlsFinales.join(', '), // Links separados por coma
             estado: 'Pendiente' 
         };
 
         const { error } = await supabase.from('reportes').insert([nuevoReporte]);
         if (error) throw error;
         
-        alert("✅ Reporte enviado con evidencia");
+        alert("✅ Reporte enviado con éxito.");
         location.reload(); 
     } catch (e) {
-        // Si falla (ej. sin internet), se guarda offline pero sin el link de foto (ya que requiere red)
-        let pendientes = JSON.parse(localStorage.getItem('reportes_pendientes') || "[]");
-        const nuevoReporteOffline = { nombre_ciudadano: n, sector: s, descripcion: d, ubicacion: "Pendiente", estado: 'Pendiente' };
-        pendientes.push(nuevoReporteOffline);
-        localStorage.setItem('reportes_pendientes', JSON.stringify(pendientes));
-        alert("📡 Error al subir imagen o datos. Guardado localmente sin foto.");
-        location.reload();
+        alert("❌ " + e.message);
+        if(btn) { btn.disabled = false; btn.innerText = "Enviar al GAD"; }
     }
 };
 
-// 4. ADMINISTRACIÓN (MANTENIDO)
+// 4. ADMINISTRACIÓN
 window.verificarAdmin = function() {
     const clave = prompt("Clave de acceso:");
     if (clave === "LITA2026") {
@@ -82,27 +130,11 @@ window.verificarAdmin = function() {
     } else { alert("Clave incorrecta"); }
 };
 
-// 5. TABLA WEB (ACTUALIZADA: COLUMNA FOTO 🖼️)
+// 5. TABLA WEB
 async function actualizarTabla() {
     const { data, error } = await supabase.from('reportes').select('*').order('created_at', { ascending: false });
     const cont = document.getElementById('tablaReportes');
     if (error || !cont) return;
-
-    const panelAdmin = document.getElementById('panelAdmin');
-    const cabecera = panelAdmin.querySelector('.flex.justify-between.items-center');
-    
-    if (cabecera) {
-        cabecera.className = "flex flex-col w-full mb-6";
-        cabecera.innerHTML = `
-            <h2 class="text-2xl font-black text-blue-900 text-center w-full mb-2 uppercase">GESTIÓN DE REPORTES</h2>
-            <div class="flex justify-end w-full">
-                <button id="btnExportar" class="bg-green-700 hover:bg-green-800 text-white px-5 py-2 rounded text-[10px] font-bold shadow-sm transition-all uppercase">
-                    REPORTE EXCEL
-                </button>
-            </div>
-        `;
-        document.getElementById('btnExportar').onclick = () => window.exportarExcel();
-    }
 
     cont.innerHTML = `
         <table class="w-full text-left text-[10px] border-collapse">
@@ -111,7 +143,7 @@ async function actualizarTabla() {
                     <th class="p-2">FECHA</th>
                     <th class="p-2">CIUDADANO</th>
                     <th class="p-2">SECTOR</th>
-                    <th class="p-2 text-center">FOTO</th>
+                    <th class="p-2 text-center">FOTOS</th>
                     <th class="p-2 text-center">MAPA</th>
                     <th class="p-2">DETALLE</th>
                     <th class="p-2 text-center">ESTADO</th>
@@ -119,17 +151,20 @@ async function actualizarTabla() {
                 </tr>
             </thead>
             <tbody>
-                ${data.map(item => `
+                ${data.map(item => {
+                    // Lógica para mostrar múltiples fotos en la tabla
+                    const fotos = item.foto_url ? item.foto_url.split(', ') : [];
+                    const fotosHtml = fotos.map((url, i) => `<a href="${url}" target="_blank" class="mr-1">🖼️${i+1}</a>`).join('');
+
+                    return `
                     <tr class="border-b border-gray-200">
                         <td class="p-2 text-gray-600">${new Date(item.created_at).toLocaleDateString()}</td>
                         <td class="p-2 font-bold text-blue-900">${item.nombre_ciudadano}</td>
                         <td class="p-2 text-gray-700 uppercase font-semibold">${item.sector}</td>
-                        <td class="p-2 text-center">
-                            ${item.foto_url ? `<a href="${item.foto_url}" target="_blank">🖼️</a>` : '—'}
-                        </td>
+                        <td class="p-2 text-center">${fotosHtml || '—'}</td>
                         <td class="p-2 text-center text-base">
                             ${item.ubicacion && item.ubicacion.includes('http') 
-                                ? `<a href="${item.ubicacion}" target="_blank" style="text-decoration: none;">📍</a>` 
+                                ? `<a href="${item.ubicacion}" target="_blank">📍</a>` 
                                 : '<span class="text-gray-400 text-[8px]">N/A</span>'}
                         </td>
                         <td class="p-2 text-gray-500 italic max-w-[150px] truncate">${item.descripcion}</td>
@@ -138,21 +173,21 @@ async function actualizarTabla() {
                                 item.estado === 'Finalizado' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-yellow-50 text-yellow-800 border-yellow-200'
                             }">${item.estado}</span>
                         </td>
-                        <td class="p-2">
+                        <td class="p-2 text-center">
                             <div class="flex justify-center gap-1">
                                 ${item.estado !== 'Finalizado' ? `
-                                    <button onclick="window.cambiarEstado('${item.id}')" class="bg-green-600 text-white font-bold text-[8px] py-1 px-2 rounded hover:bg-green-700">OK</button>
-                                    <button onclick="window.eliminarReporte('${item.id}')" class="bg-red-600 text-white font-bold text-[8px] py-1 px-2 rounded hover:bg-red-700">X</button>
+                                    <button onclick="window.cambiarEstado('${item.id}')" class="bg-green-600 text-white font-bold text-[8px] py-1 px-2 rounded">OK</button>
+                                    <button onclick="window.eliminarReporte('${item.id}')" class="bg-red-600 text-white font-bold text-[8px] py-1 px-2 rounded">X</button>
                                 ` : '✅'}
                             </div>
                         </td>
-                    </tr>
-                `).join('')}
+                    </tr>`;
+                }).join('')}
             </tbody>
         </table>`;
 }
 
-// 6. ACCIONES (MANTENIDO)
+// 6. ACCIONES
 window.cambiarEstado = async (id) => {
     await supabase.from('reportes').update({ estado: 'Finalizado' }).eq('id', id);
     actualizarTabla();
@@ -216,7 +251,7 @@ window.exportarExcel = async function() {
     link.click();
 };
 
-// 8. SINCRONIZADOR (MANTENIDO)
+// 8. SINCRONIZADOR
 async function sincronizarPendientes() {
     if (!navigator.onLine) return;
     let pendientes = JSON.parse(localStorage.getItem('reportes_pendientes') || "[]");
