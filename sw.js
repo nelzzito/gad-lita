@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gad-lita-plus-v2'; // Cambié a V2 para forzar al celular a actualizarse
+const CACHE_NAME = 'gad-lita-plus-v3'; // Subimos a V3
 
 const assets = [
   './',
@@ -7,7 +7,6 @@ const assets = [
   './style.css',
   './logo.png',
   './manifest.json',
-  // LIBRERÍAS EXTERNAS (Crucial para que no se dañe el diseño)
   'https://cdn.tailwindcss.com',
   'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
 ];
@@ -16,11 +15,11 @@ const assets = [
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
-      console.log('Cache actualizado: Guardando diseño y librerías');
+      console.log('✅ Cache V3: Guardando recursos críticos');
       return cache.addAll(assets);
     })
   );
-  self.skipWaiting(); // Obliga al nuevo Service Worker a activarse de inmediato
+  self.skipWaiting();
 });
 
 // 2. ACTIVACIÓN
@@ -32,25 +31,33 @@ self.addEventListener('activate', event => {
       );
     })
   );
+  // Toma el control de la página inmediatamente
+  self.clients.claim();
 });
 
-// 3. ESTRATEGIA DE CARGA
+// 3. ESTRATEGIA DE CARGA (Cache First para rapidez)
 self.addEventListener('fetch', event => {
-  // Ignorar peticiones de subida de datos a Supabase (eso lo maneja el main.js)
+  // Solo interceptar peticiones GET (no subidas a Supabase)
   if (event.request.method !== 'GET') return;
+
+  // No cachear llamadas directas a la API de Supabase para que no haya datos viejos
+  if (event.request.url.includes('supabase.co') && !event.request.url.includes('js')) {
+    return;
+  }
 
   event.respondWith(
     caches.match(event.request).then(response => {
-      // Devuelve lo que hay en memoria, si no está, va a internet
+      // Si está en caché, lo entrega. Si no, va a la red y lo guarda.
       return response || fetch(event.request).then(fetchRes => {
         return caches.open(CACHE_NAME).then(cache => {
-          // Si es un recurso nuevo que no estaba en la lista, lo guarda para la próxima
-          if (event.request.url.includes('cdn') || event.request.url.includes('googleapis')) {
-             cache.put(event.request.url, fetchRes.clone());
+          // Guardamos dinámicamente cualquier cosa de Tailwind o fuentes
+          if (event.request.url.includes('cdn') || event.request.url.includes('fonts')) {
+            cache.put(event.request.url, fetchRes.clone());
           }
           return fetchRes;
         });
       }).catch(() => {
+        // Si no hay red y es la página principal, entregar el index
         if (event.request.mode === 'navigate') {
           return caches.match('./index.html');
         }

@@ -6,6 +6,13 @@ const supabase = createClient(supabaseUrl, supabaseKey)
 
 let listaFotos = []; 
 
+// --- CONFIGURACIÓN DE BODEGA OFFLINE (IndexedDB) ---
+// Necesario para guardar archivos de fotos reales sin internet
+const dbRequest = indexedDB.open("BodegaReportesLita", 1);
+dbRequest.onupgradeneeded = e => {
+    e.target.result.createObjectStore("pendientes", { autoIncrement: true });
+};
+
 // --- GESTIÓN DE FOTOS ---
 const fotoInput = document.getElementById('fotoInput');
 if (fotoInput) {
@@ -73,40 +80,41 @@ async function obtenerLinkMapa() {
         if (!navigator.geolocation) resolve("No soportado");
         navigator.geolocation.getCurrentPosition(
             (p) => resolve(`https://www.google.com/maps?q=${p.coords.latitude},${p.coords.longitude}`),
-            () => resolve("Ubicación no proporcionada"), { timeout: 5000 }
+            () => resolve("Ubicación no proporcionada"), { timeout: 8000, enableHighAccuracy: true }
         );
     });
 }
 
-// 3. ENVÍO (CON LÓGICA DE CONTROL ESTRICTA)
+// 3. ENVÍO (CON LÓGICA MEJORADA PARA FOTOS OFFLINE)
 window.enviarReporte = async function() {
     const n = document.getElementById('nombre').value;
     const s = document.getElementById('sector').value;
     const d = document.getElementById('detalle').value;
     
-    // CONTROL DE CAMPOS VACÍOS
-    if (!n || !s || !d) {
-        return alert("⚠️ Llene los campos obligatorios (Nombre, Sector y Detalle).");
-    }
+    if (!n || !s || !d) return alert("⚠️ Llene los campos obligatorios.");
+    if (listaFotos.length === 0) return alert("⚠️ ERROR: Debe incluir al menos una foto.");
 
-    // CONTROL OBLIGATORIO DE FOTOS (Mínimo 1)
-    if (listaFotos.length === 0) {
-        return alert("⚠️ ERROR: Es obligatorio subir al menos una foto para enviar el reporte.");
-    }
+    // Capturamos el GPS de una vez (funciona mejor si se pide antes de entrar en lógica de guardado)
+    const gps = await obtenerLinkMapa();
 
     // --- CASO: SIN INTERNET ---
     if (!navigator.onLine) {
-        let pendientes = JSON.parse(localStorage.getItem('reportes_pendientes') || "[]");
-        pendientes.push({ 
+        const db = dbRequest.result;
+        const tx = db.transaction("pendientes", "readwrite");
+        const store = tx.objectStore("pendientes");
+        
+        // Guardamos TODO el objeto incluyendo los archivos de las fotos
+        store.add({ 
             nombre_ciudadano: n, 
             sector: s, 
             descripcion: d, 
-            ubicacion: "Offline (Sin GPS)", 
-            foto_url: "", 
-            estado: 'Pendiente' 
+            ubicacion: gps, 
+            fotos_binarias: listaFotos, // Guardamos los archivos reales
+            estado: 'Pendiente',
+            created_at: new Date().toISOString()
         });
-        localStorage.setItem('reportes_pendientes', JSON.stringify(pendientes));
-        alert("📡 MODO OFFLINE: Los datos de texto han sido guardados. Se enviarán al GAD cuando recuperes la señal.");
+
+        alert("📡 MODO OFFLINE: Reporte, Fotos y GPS guardados en el celular. Se subirán automáticamente al recuperar internet.");
         location.reload();
         return;
     }
@@ -116,21 +124,12 @@ window.enviarReporte = async function() {
     btn.innerText = "Procesando evidencias... ⏳";
 
     try {
-        // Subida de fotos
         const urls = await Promise.all(listaFotos.map(f => procesarYSubir(f)));
         const urlFotos = urls.join(', ');
         
-        btn.innerText = "Ubicando... 📍";
-        const gps = await obtenerLinkMapa();
-        
-        btn.innerText = "Enviando... 🛡️";
         const { error } = await supabase.from('reportes').insert([{ 
-            nombre_ciudadano: n, 
-            sector: s, 
-            descripcion: d, 
-            ubicacion: gps, 
-            foto_url: urlFotos, 
-            estado: 'Pendiente' 
+            nombre_ciudadano: n, sector: s, descripcion: d, 
+            ubicacion: gps, foto_url: urlFotos, estado: 'Pendiente' 
         }]);
 
         if (error) throw error;
@@ -143,7 +142,7 @@ window.enviarReporte = async function() {
     }
 };
 
-// 4. ADMINISTRACIÓN Y TABLA (RECUPERADA Y COMPLETA)
+// 4. ADMINISTRACIÓN Y TABLA
 window.verificarAdmin = function() {
     if (prompt("Clave:") === "LITA2026") {
         document.getElementById('panelAdmin').classList.remove('hidden');
@@ -180,7 +179,7 @@ async function actualizarTabla() {
                         <td class="p-2">${new Date(item.created_at).toLocaleDateString()}</td>
                         <td class="p-2 font-bold">${item.nombre_ciudadano}</td>
                         <td class="p-2 uppercase">${item.sector}</td>
-                        <td class="p-2 text-center">${fotosHtml || '<span class="text-gray-400">Sin fotos</span>'}</td>
+                        <td class="p-2 text-center">${fotosHtml || '—'}</td>
                         <td class="p-2 text-center text-base">
                             ${item.ubicacion?.includes('http') ? `<a href="${item.ubicacion}" target="_blank">📍</a>` : '—'}
                         </td>
@@ -203,16 +202,43 @@ async function actualizarTabla() {
 window.cambiarEstado = async (id) => { await supabase.from('reportes').update({ estado: 'Finalizado' }).eq('id', id); actualizarTabla(); };
 window.eliminarReporte = async (id) => { if(confirm("¿Eliminar?")) { await supabase.from('reportes').delete().eq('id', id); actualizarTabla(); } };
 
+// --- NUEVA SINCRONIZACIÓN AUTOMÁTICA (TEXTO + FOTOS BINARIAS) ---
 async function sincronizarPendientes() {
-    if (!navigator.onLine) return;
-    let pendientes = JSON.parse(localStorage.getItem('reportes_pendientes') || "[]");
-    if (pendientes.length === 0) return;
-    for (let i = 0; i < pendientes.length; i++) {
-        const { error } = await supabase.from('reportes').insert([pendientes[i]]);
-        if (!error) { pendientes.splice(i, 1); i--; }
-    }
-    localStorage.setItem('reportes_pendientes', JSON.stringify(pendientes));
+    if (!navigator.onLine || !dbRequest.result) return;
+    
+    const db = dbRequest.result;
+    const tx = db.transaction("pendientes", "readwrite");
+    const store = tx.objectStore("pendientes");
+    const request = store.openCursor();
+
+    request.onsuccess = async e => {
+        const cursor = e.target.result;
+        if (cursor) {
+            const res = cursor.value;
+            try {
+                // 1. Subir las fotos que estaban guardadas en binario
+                const urls = await Promise.all(res.fotos_binarias.map(f => procesarYSubir(f)));
+                const urlFotos = urls.join(', ');
+
+                // 2. Insertar el reporte completo
+                const { error } = await supabase.from('reportes').insert([{
+                    nombre_ciudadano: res.nombre_ciudadano,
+                    sector: res.sector,
+                    descripcion: res.descripcion,
+                    ubicacion: res.ubicacion,
+                    foto_url: urlFotos,
+                    estado: 'Pendiente'
+                }]);
+
+                if (!error) store.delete(cursor.key); // Borrar si se subió con éxito
+            } catch (err) {
+                console.error("Error sincronizando reporte:", err);
+            }
+            cursor.continue();
+        }
+    };
 }
 
 window.addEventListener('online', sincronizarPendientes);
-sincronizarPendientes();
+// Intentar sincronizar al arrancar la app por si ya hay red
+setTimeout(sincronizarPendientes, 3000);
