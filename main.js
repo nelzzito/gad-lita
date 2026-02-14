@@ -4,7 +4,18 @@ const supabaseUrl = 'https://hnqshnbdndsvurffrpjs.supabase.co'
 const supabaseKey = 'sb_publishable_wgDPu5O49WPdWsm_xE_jmA_hJ4PoEXp'
 const supabase = createClient(supabaseUrl, supabaseKey)
 
-// 2. GPS (CORREGIDO)
+// --- NUEVA FUNCIÓN: SUBIDA DE FOTO AL STORAGE ---
+async function subirFoto(archivo) {
+    const nombreArchivo = `${Date.now()}_${archivo.name}`;
+    const { data, error } = await supabase.storage
+        .from('fotos_reportes')
+        .upload(nombreArchivo, archivo);
+    if (error) throw new Error("Error al subir imagen");
+    const { data: urlData } = supabase.storage.from('fotos_reportes').getPublicUrl(nombreArchivo);
+    return urlData.publicUrl;
+}
+
+// 2. GPS (MANTENIDO)
 async function obtenerLinkMapa() {
     return new Promise((resolve) => {
         if (!navigator.geolocation) resolve("No soportado");
@@ -17,36 +28,51 @@ async function obtenerLinkMapa() {
     });
 }
 
-// 3. ENVÍO DEL CIUDADANO
+// 3. ENVÍO DEL CIUDADANO (ACTUALIZADO CON FOTO)
 window.enviarReporte = async function() {
     const n = document.getElementById('nombre').value;
     const s = document.getElementById('sector').value;
     const d = document.getElementById('detalle').value;
+    const fotoFile = document.getElementById('foto').files[0]; // Captura el archivo
     
-    if (!n || !s || !d) return alert("⚠️ Llene todos los campos");
+    if (!n || !s || !d || !fotoFile) return alert("⚠️ Llene todos los campos e incluya la foto");
     
     const btn = document.querySelector("button[onclick='enviarReporte()']");
-    if(btn) { btn.disabled = true; btn.innerText = "Enviando..."; }
-
-    const gps = await obtenerLinkMapa();
-    const nuevoReporte = { nombre_ciudadano: n, sector: s, descripcion: d, ubicacion: gps, estado: 'Pendiente' };
+    if(btn) { btn.disabled = true; btn.innerText = "Subiendo Evidencia..."; }
 
     try {
+        // 1. Subir foto primero
+        const urlFoto = await subirFoto(fotoFile);
+        
+        // 2. Obtener GPS
+        const gps = await obtenerLinkMapa();
+        
+        const nuevoReporte = { 
+            nombre_ciudadano: n, 
+            sector: s, 
+            descripcion: d, 
+            ubicacion: gps, 
+            foto_url: urlFoto, // Nueva columna
+            estado: 'Pendiente' 
+        };
+
         const { error } = await supabase.from('reportes').insert([nuevoReporte]);
         if (error) throw error;
         
-        alert("✅ Reporte enviado con éxito");
+        alert("✅ Reporte enviado con evidencia");
         location.reload(); 
     } catch (e) {
+        // Si falla (ej. sin internet), se guarda offline pero sin el link de foto (ya que requiere red)
         let pendientes = JSON.parse(localStorage.getItem('reportes_pendientes') || "[]");
-        pendientes.push(nuevoReporte);
+        const nuevoReporteOffline = { nombre_ciudadano: n, sector: s, descripcion: d, ubicacion: "Pendiente", estado: 'Pendiente' };
+        pendientes.push(nuevoReporteOffline);
         localStorage.setItem('reportes_pendientes', JSON.stringify(pendientes));
-        alert("📡 Sin conexión. El reporte se guardó localmente.");
+        alert("📡 Error al subir imagen o datos. Guardado localmente sin foto.");
         location.reload();
     }
 };
 
-// 4. ADMINISTRACIÓN
+// 4. ADMINISTRACIÓN (MANTENIDO)
 window.verificarAdmin = function() {
     const clave = prompt("Clave de acceso:");
     if (clave === "LITA2026") {
@@ -56,7 +82,7 @@ window.verificarAdmin = function() {
     } else { alert("Clave incorrecta"); }
 };
 
-// 5. TABLA WEB (COLUMNA UBICACIÓN CON ICONO 📍)
+// 5. TABLA WEB (ACTUALIZADA: COLUMNA FOTO 🖼️)
 async function actualizarTabla() {
     const { data, error } = await supabase.from('reportes').select('*').order('created_at', { ascending: false });
     const cont = document.getElementById('tablaReportes');
@@ -85,6 +111,7 @@ async function actualizarTabla() {
                     <th class="p-2">FECHA</th>
                     <th class="p-2">CIUDADANO</th>
                     <th class="p-2">SECTOR</th>
+                    <th class="p-2 text-center">FOTO</th>
                     <th class="p-2 text-center">MAPA</th>
                     <th class="p-2">DETALLE</th>
                     <th class="p-2 text-center">ESTADO</th>
@@ -97,9 +124,12 @@ async function actualizarTabla() {
                         <td class="p-2 text-gray-600">${new Date(item.created_at).toLocaleDateString()}</td>
                         <td class="p-2 font-bold text-blue-900">${item.nombre_ciudadano}</td>
                         <td class="p-2 text-gray-700 uppercase font-semibold">${item.sector}</td>
+                        <td class="p-2 text-center">
+                            ${item.foto_url ? `<a href="${item.foto_url}" target="_blank">🖼️</a>` : '—'}
+                        </td>
                         <td class="p-2 text-center text-base">
                             ${item.ubicacion && item.ubicacion.includes('http') 
-                                ? `<a href="${item.ubicacion}" target="_blank" title="Abrir Mapa" style="text-decoration: none;">📍</a>` 
+                                ? `<a href="${item.ubicacion}" target="_blank" style="text-decoration: none;">📍</a>` 
                                 : '<span class="text-gray-400 text-[8px]">N/A</span>'}
                         </td>
                         <td class="p-2 text-gray-500 italic max-w-[150px] truncate">${item.descripcion}</td>
@@ -122,7 +152,7 @@ async function actualizarTabla() {
         </table>`;
 }
 
-// 6. ACCIONES
+// 6. ACCIONES (MANTENIDO)
 window.cambiarEstado = async (id) => {
     await supabase.from('reportes').update({ estado: 'Finalizado' }).eq('id', id);
     actualizarTabla();
@@ -135,12 +165,11 @@ window.eliminarReporte = async (id) => {
     }
 };
 
-// 7. EXPORTAR EXCEL
+// 7. EXPORTAR EXCEL (MANTENIDO)
 window.exportarExcel = async function() {
     const { data, error } = await supabase.from('reportes').select('*').order('created_at', { ascending: false });
     if (error) return alert("Error al obtener datos");
 
-    const ahora = new Date().toLocaleString();
     let xmlRows = "";
     data.forEach(r => {
         const f = new Date(r.created_at).toLocaleString();
@@ -155,14 +184,12 @@ window.exportarExcel = async function() {
         </Row>`;
     });
 
-    const excelTemplate = `<?xml version="1.0"?>
-    <?mso-application progid="Excel.Sheet"?>
+    const excelTemplate = `<?xml version="1.0"?><?mso-application progid="Excel.Sheet"?>
     <Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
      <Styles>
       <Style ss:ID="sTitulo"><Alignment ss:Horizontal="Center" ss:Vertical="Center"/><Font ss:FontName="Arial" ss:Size="14" ss:Bold="1" ss:Color="#228B22"/></Style>
       <Style ss:ID="sHeader"><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/></Borders><Font ss:Bold="1"/><Interior ss:Color="#D3D3D3" ss:Pattern="Solid"/></Style>
       <Style ss:ID="sDatos"><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/></Borders></Style>
-      <Style ss:ID="sFooter"><Font ss:Size="9" ss:Italic="1" ss:Color="#666666"/></Style>
      </Styles>
      <Worksheet ss:Name="Reportes">
       <Table ss:ExpandedColumnCount="6">
@@ -189,7 +216,7 @@ window.exportarExcel = async function() {
     link.click();
 };
 
-// 8. SINCRONIZADOR
+// 8. SINCRONIZADOR (MANTENIDO)
 async function sincronizarPendientes() {
     if (!navigator.onLine) return;
     let pendientes = JSON.parse(localStorage.getItem('reportes_pendientes') || "[]");
