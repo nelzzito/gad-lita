@@ -187,26 +187,38 @@ window.cambiarEstado = async (id) => { await supabase.from('reportes').update({ 
 window.eliminarReporte = async (id) => { if(confirm("¿Eliminar?")) { await supabase.from('reportes').delete().eq('id', id); actualizarTabla(); } };
 
 // --- SINCRONIZACIÓN REFORZADA (CORREGIDA) ---
+// --- SISTEMA DE SINCRONIZACIÓN PROFESIONAL (SIN ADIVINANZAS) ---
 async function sincronizarPendientes() {
-    if (!navigator.onLine || !dbRequest.result) return;
+    if (!navigator.onLine) return;
     
     const db = dbRequest.result;
+    if (!db) return;
+
     const tx = db.transaction("pendientes", "readonly");
     const store = tx.objectStore("pendientes");
-    const todos = [];
+    const pendientes = [];
 
-    // Primero leemos todo para no mantener la transacción abierta mientras subimos fotos
     const request = store.openCursor();
     request.onsuccess = async e => {
         const cursor = e.target.result;
         if (cursor) {
-            todos.push({ id: cursor.key, data: cursor.value });
+            pendientes.push({ id: cursor.key, data: cursor.value });
             cursor.continue();
         } else {
-            // Procesamos uno por uno fuera de la transacción de lectura
-            for (const item of todos) {
+            if (pendientes.length === 0) return;
+
+            console.log(`Intentando subir ${pendientes.length} reportes...`);
+
+            for (const item of pendientes) {
                 try {
-                    const urls = await Promise.all(item.data.fotos_binarias.map(f => procesarYSubir(f)));
+                    // 1. Subida de fotos con verificación
+                    const urls = await Promise.all(item.data.fotos_binarias.map(async (f) => {
+                        const url = await procesarYSubir(f);
+                        if (!url) throw new Error("Error al obtener URL de la foto");
+                        return url;
+                    }));
+
+                    // 2. Inserción en tabla
                     const { error } = await supabase.from('reportes').insert([{
                         nombre_ciudadano: item.data.nombre_ciudadano,
                         sector: item.data.sector,
@@ -216,14 +228,22 @@ async function sincronizarPendientes() {
                         estado: 'Pendiente'
                     }]);
 
-                    if (!error) {
-                        // Borramos individualmente con una nueva transacción corta
-                        const deleteTx = db.transaction("pendientes", "readwrite");
-                        deleteTx.objectStore("pendientes").delete(item.id);
-                        console.log("✅ Sincronizado y borrado:", item.id);
+                    if (error) {
+                        alert(`❌ ERROR DE SUPABASE: ${error.message}`);
+                        return; // Detener para no perder datos
                     }
-                } catch (err) { console.error("Fallo subida", err); }
+
+                    // 3. Borrado local solo si Supabase confirmó éxito
+                    const deleteTx = db.transaction("pendientes", "readwrite");
+                    deleteTx.objectStore("pendientes").delete(item.id);
+                    
+                    alert(`✅ Reporte de ${item.data.nombre_ciudadano} sincronizado con éxito.`);
+                } catch (err) {
+                    alert(`❌ FALLO CRÍTICO: ${err.message}. Verifica las políticas de Storage en Supabase.`);
+                    break; 
+                }
             }
+            actualizarTabla(); // Refresca la vista de admin si está abierta
         }
     };
 }
