@@ -1,10 +1,43 @@
 // 1. CONFIGURACIÓN SUPABASE
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
+
 const supabaseUrl = 'https://hnqshnbdndsvurffrpjs.supabase.co'
 const supabaseKey = 'sb_publishable_wgDPu5O49WPdWsm_xE_jmA_hJ4PoEXp'
 const supabase = createClient(supabaseUrl, supabaseKey)
 
 let listaFotos = []; // Almacén temporal de archivos
+
+// --- FUNCIÓN DE COMPRESIÓN (PARA EVITAR ERROR DE CUOTA CON 3 FOTOS OFFLINE) ---
+async function comprimirImagen(base64Str) {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.src = base64Str;
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const MAX_WIDTH = 800; 
+            let width = img.width;
+            let height = img.height;
+
+            if (width > height) {
+                if (width > MAX_WIDTH) {
+                    height *= MAX_WIDTH / width;
+                    width = MAX_WIDTH;
+                }
+            } else {
+                if (height > MAX_WIDTH) {
+                    width *= MAX_WIDTH / height;
+                    height = MAX_WIDTH;
+                }
+            }
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            // Comprimimos al 60% para que 3 fotos pesen menos de 1MB en total
+            resolve(canvas.toDataURL('image/jpeg', 0.6));
+        };
+    });
+}
 
 // --- LÓGICA DE FOTOS (AÑADIR Y BORRAR) ---
 const fotoInput = document.getElementById('fotoInput');
@@ -84,7 +117,7 @@ async function obtenerLinkMapa() {
     });
 }
 
-// 3. ENVÍO DEL CIUDADANO (REPARADO PARA OFFLINE)
+// 3. ENVÍO DEL CIUDADANO (ESTRATEGIA HÍBRIDA)
 window.enviarReporte = async function() {
     const n = document.getElementById('nombre').value;
     const s = document.getElementById('sector').value;
@@ -97,22 +130,28 @@ window.enviarReporte = async function() {
     const btn = document.querySelector("button[onclick='enviarReporte()']");
     if(btn) { btn.disabled = true; btn.innerText = "Procesando... ⏳"; }
 
-    // BLOQUE DE SEGURIDAD OFFLINE: Si no hay internet, guardar y salir.
-    if (!navigator.onLine) {
-        try {
-            const promesasBase64 = listaFotos.map(file => new Promise((res) => {
-                const r = new FileReader();
-                r.onload = (e) => res(e.target.result);
-                r.readAsDataURL(file);
-            }));
-            const fotosB64 = await Promise.all(promesasBase64);
+    try {
+        const gps = await obtenerLinkMapa();
+
+        if (!navigator.onLine) {
+            // PROCESO OFFLINE CON COMPRESIÓN PARA LAS 3 FOTOS
+            const fotosComprimidas = [];
+            for (const file of listaFotos) {
+                const b64 = await new Promise(res => {
+                    const r = new FileReader();
+                    r.onload = (e) => res(e.target.result);
+                    r.readAsDataURL(file);
+                });
+                const comprimida = await comprimirImagen(b64);
+                fotosComprimidas.push(comprimida);
+            }
 
             const reporteOffline = {
                 nombre_ciudadano: n,
                 sector: s,
                 descripcion: d,
-                ubicacion: "Pendiente (Capturado Offline)",
-                foto_url: fotosB64, 
+                ubicacion: gps,
+                foto_url: fotosComprimidas, 
                 estado: 'Pendiente',
                 created_at: new Date().toISOString()
             };
@@ -121,36 +160,28 @@ window.enviarReporte = async function() {
             pendientes.push(reporteOffline);
             localStorage.setItem('reportes_pendientes', JSON.stringify(pendientes));
 
-            alert("📡 Sin internet: Reporte guardado localmente. Se enviará al GAD automáticamente al recuperar conexión.");
+            alert("📡 Sin internet: Reporte guardado localmente con éxito. Se enviará al GAD automáticamente al recuperar conexión.");
             location.reload();
-            return; 
-        } catch (e) {
-            alert("Error local: " + e.message);
-            if(btn) { btn.disabled = false; btn.innerText = "Enviar al GAD"; }
             return;
         }
-    }
 
-    // PROCESO ONLINE NORMAL
-    try {
-        const gps = await obtenerLinkMapa();
+        // PROCESO ONLINE NORMAL
         const subidas = listaFotos.map(file => subirFoto(file));
         const urlsFinales = await Promise.all(subidas);
         
-        const nuevoReporte = { 
+        const { error } = await supabase.from('reportes').insert([{ 
             nombre_ciudadano: n, 
             sector: s, 
             descripcion: d, 
             ubicacion: gps, 
             foto_url: urlsFinales.join(', '), 
             estado: 'Pendiente' 
-        };
+        }]);
 
-        const { error } = await supabase.from('reportes').insert([nuevoReporte]);
         if (error) throw error;
-        
         alert("✅ Reporte enviado con éxito.");
         location.reload(); 
+
     } catch (e) {
         alert("❌ Error: " + e.message);
         if(btn) { btn.disabled = false; btn.innerText = "Enviar al GAD"; }
@@ -191,6 +222,7 @@ async function actualizarTabla() {
                 ${data.map(item => {
                     const fotos = item.foto_url ? item.foto_url.split(', ') : [];
                     const fotosHtml = fotos.map((url, i) => `<a href="${url}" target="_blank" class="mr-1">🖼️${i+1}</a>`).join('');
+
                     return `
                     <tr class="border-b border-gray-200">
                         <td class="p-2 text-gray-600">${new Date(item.created_at).toLocaleDateString()}</td>
@@ -235,16 +267,17 @@ window.eliminarReporte = async (id) => {
     }
 };
 
-// 7. EXPORTAR EXCEL
+// 7. EXPORTAR EXCEL PROFESIONAL
 window.exportarExcel = async function() {
     const { data, error } = await supabase.from('reportes').select('*').order('created_at', { ascending: false });
     if (error) return alert("Error al obtener datos");
-    const fechaGeneracion = new Date().toLocaleString();
+
     let xmlRows = "";
     data.forEach(r => {
         const f = new Date(r.created_at).toLocaleString();
         const fotosArray = r.foto_url ? r.foto_url.split(', ') : [];
         const linkFoto = fotosArray.length > 0 ? fotosArray[0] : "";
+
         xmlRows += `
         <Row>
             <Cell ss:StyleID="sDatos"><Data ss:Type="String">${f}</Data></Cell>
@@ -264,7 +297,6 @@ window.exportarExcel = async function() {
       <Style ss:ID="sHeader"><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/></Borders><Font ss:Bold="1"/><Interior ss:Color="#D3D3D3" ss:Pattern="Solid"/></Style>
       <Style ss:ID="sDatos"><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/></Borders></Style>
       <Style ss:ID="sLink"><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/></Borders><Font ss:Color="#0000FF" ss:Underline="Single"/></Style>
-      <Style ss:ID="sPie"><Font ss:Italic="1" ss:Color="#666666" ss:Size="9"/></Style>
      </Styles>
      <Worksheet ss:Name="Reportes">
       <Table ss:ExpandedColumnCount="7">
@@ -276,22 +308,22 @@ window.exportarExcel = async function() {
         <Cell ss:StyleID="sHeader"><Data ss:Type="String">SECTOR</Data></Cell>
         <Cell ss:StyleID="sHeader"><Data ss:Type="String">DETALLE</Data></Cell>
         <Cell ss:StyleID="sHeader"><Data ss:Type="String">ESTADO</Data></Cell>
-        <Cell ss:StyleID="sHeader"><Data ss:Type="String">UBICACIÓN</Data></Cell>
-        <Cell ss:StyleID="sHeader"><Data ss:Type="String">EVIDENCIA</Data></Cell>
+        <Cell ss:StyleID="sHeader"><Data ss:Type="String">MAPA</Data></Cell>
+        <Cell ss:StyleID="sHeader"><Data ss:Type="String">FOTO</Data></Cell>
        </Row>
        ${xmlRows}
       </Table>
      </Worksheet>
     </Workbook>`;
+
     const blob = new Blob([excelTemplate], { type: "application/vnd.ms-excel" });
-    const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-    link.href = url;
+    link.href = URL.createObjectURL(blob);
     link.download = `Reporte_GAD_Lita.xls`;
     link.click();
 };
 
-// 8. SINCRONIZADOR INTEGRAL
+// 8. SINCRONIZADOR FINAL (DEPURADO)
 async function sincronizarPendientes() {
     if (!navigator.onLine) return;
     let pendientes = JSON.parse(localStorage.getItem('reportes_pendientes') || "[]");
@@ -302,7 +334,7 @@ async function sincronizarPendientes() {
             const reporte = pendientes[i];
             const urlsFinales = [];
             
-            for (const b64 of reporte.foto_url) {
+            for (const b64 de reporte.foto_url) {
                 const res = await fetch(b64);
                 const blob = await res.blob();
                 const archivo = new File([blob], `offline_${Date.now()}.jpg`, { type: "image/jpeg" });
