@@ -334,7 +334,7 @@ async function sincronizarPendientes() {
             const reporte = pendientes[i];
             const urlsFinales = [];
             
-            for (const b64 de reporte.foto_url) {
+            for (const b64 of reporte.foto_url) {
                 const res = await fetch(b64);
                 const blob = await res.blob();
                 const archivo = new File([blob], `offline_${Date.now()}.jpg`, { type: "image/jpeg" });
