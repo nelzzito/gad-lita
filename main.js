@@ -1,4 +1,3 @@
-
 // 1. CONFIGURACIÓN SUPABASE
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
 const supabaseUrl = 'https://hnqshnbdndsvurffrpjs.supabase.co'
@@ -7,7 +6,7 @@ const supabase = createClient(supabaseUrl, supabaseKey)
 
 let listaFotos = []; 
 
-// --- CONFIGURACIÓN DE BODEGA OFFLINE (IndexedDB) ---
+// --- BODEGA OFFLINE (IndexedDB) ---
 const dbRequest = indexedDB.open("BodegaReportesLita", 1);
 dbRequest.onupgradeneeded = e => {
     e.target.result.createObjectStore("pendientes", { autoIncrement: true });
@@ -16,17 +15,11 @@ dbRequest.onupgradeneeded = e => {
 // --- GESTIÓN DE FOTOS ---
 const fotoInput = document.getElementById('fotoInput');
 if (fotoInput) {
-    fotoInput.addEventListener('change', function(e) {
+    fotoInput.addEventListener('change', e => {
         const file = e.target.files[0];
-        if (!file) return;
-        if (listaFotos.length >= 3) {
-            alert("⚠️ Máximo 3 fotos permitidas por reporte.");
-            e.target.value = ""; 
-            return;
-        }
+        if (!file || listaFotos.length >= 3) return;
         listaFotos.push(file);
         actualizarMiniaturas();
-        e.target.value = ""; 
     });
 }
 
@@ -47,8 +40,6 @@ function actualizarMiniaturas() {
         };
         reader.readAsDataURL(foto);
     });
-    const btnCapturar = document.getElementById('btnCapturar');
-    if (btnCapturar) btnCapturar.style.display = listaFotos.length >= 3 ? 'none' : 'flex';
 }
 
 window.quitarFoto = (index) => {
@@ -56,7 +47,7 @@ window.quitarFoto = (index) => {
     actualizarMiniaturas();
 };
 
-// COMPRESIÓN Y SUBIDA
+// --- COMPRESIÓN Y SUBIDA ---
 async function procesarYSubir(archivo) {
     const bitmap = await createImageBitmap(archivo);
     const canvas = document.createElement('canvas');
@@ -72,7 +63,7 @@ async function procesarYSubir(archivo) {
     return (supabase.storage.from('fotos_reportes').getPublicUrl(nombre)).data.publicUrl;
 }
 
-// 2. GPS (CORREGIDO)
+// --- GPS CORREGIDO ---
 async function obtenerLinkMapa() {
     return new Promise((resolve) => {
         if (!navigator.geolocation) resolve("No soportado");
@@ -83,40 +74,32 @@ async function obtenerLinkMapa() {
     });
 }
 
-// 3. ENVÍO
+// --- ENVÍO DE REPORTE ---
 window.enviarReporte = async function() {
     const n = document.getElementById('nombre').value;
     const s = document.getElementById('sector').value;
     const d = document.getElementById('detalle').value;
     
-    if (!n || !s || !d) return alert("⚠️ Llene los campos obligatorios.");
-    if (listaFotos.length === 0) return alert("⚠️ ERROR: Debe incluir al menos una foto.");
+    if (!n || !s || !d || listaFotos.length === 0) return alert("⚠️ Complete todos los campos y añada al menos una foto.");
 
     const gps = await obtenerLinkMapa();
 
+    // Lógica Offline
     if (!navigator.onLine) {
         const db = dbRequest.result;
         const tx = db.transaction("pendientes", "readwrite");
-        const store = tx.objectStore("pendientes");
-        
-        store.add({ 
-            nombre_ciudadano: n, 
-            sector: s, 
-            descripcion: d, 
-            ubicacion: gps, 
-            fotos_binarias: listaFotos, 
-            estado: 'Pendiente',
-            created_at: new Date().toISOString()
+        tx.objectStore("pendientes").add({ 
+            nombre_ciudadano: n, sector: s, descripcion: d, 
+            ubicacion: gps, fotos_binarias: listaFotos, 
+            estado: 'Pendiente', created_at: new Date().toISOString()
         });
-
-        alert("📡 MODO OFFLINE: Reporte guardado localmente. Se subirá al recuperar internet.");
+        alert("📡 MODO SIN INTERNET: Reporte guardado en el teléfono. Se subirá automáticamente cuando detecte conexión.");
         location.reload();
         return;
     }
 
     const btn = document.querySelector("button[onclick='enviarReporte()']");
-    btn.disabled = true;
-    btn.innerText = "Enviando... ⏳";
+    btn.disabled = true; btn.innerText = "Subiendo... ⏳";
 
     try {
         const urls = await Promise.all(listaFotos.map(f => procesarYSubir(f)));
@@ -125,22 +108,32 @@ window.enviarReporte = async function() {
             ubicacion: gps, foto_url: urls.join(', '), estado: 'Pendiente' 
         }]);
         if (error) throw error;
-        alert("✅ Reporte enviado con éxito.");
+        alert("✅ Reporte enviado exitosamente.");
         location.reload(); 
     } catch (e) {
-        alert("❌ Error de envío: " + e.message);
-        btn.disabled = false;
-        btn.innerText = "Enviar al GAD";
+        alert("❌ Error: " + e.message);
+        btn.disabled = false; btn.innerText = "Enviar al GAD";
     }
 };
 
-// 4. ADMINISTRACIÓN
+// --- ADMINISTRACIÓN Y EXCEL ---
 window.verificarAdmin = function() {
     if (prompt("Clave:") === "LITA2026") {
         document.getElementById('panelAdmin').classList.remove('hidden');
         document.getElementById('btnAccesoAdmin')?.classList.add('hidden');
         actualizarTabla();
     } else { alert("Clave incorrecta"); }
+};
+
+window.exportarExcel = async function() {
+    const { data, error } = await supabase.from('reportes').select('*').order('created_at', { ascending: false });
+    if (error) return alert("Error al exportar: " + error.message);
+    
+    // Requiere la librería SheetJS en el HTML
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Reportes");
+    XLSX.writeFile(wb, "Reportes_GAD_LITA.xlsx");
 };
 
 async function actualizarTabla() {
@@ -154,53 +147,33 @@ async function actualizarTabla() {
                 <tr>
                     <th class="p-2">FECHA</th><th class="p-2">CIUDADANO</th><th class="p-2">SECTOR</th>
                     <th class="p-2 text-center">FOTOS</th><th class="p-2 text-center">MAPA</th>
-                    <th class="p-2">DETALLE</th><th class="p-2 text-center">ESTADO</th>
-                    <th class="p-2 text-center">ACCIONES</th>
+                    <th class="p-2">DETALLE</th><th class="p-2 text-center">ACCIONES</th>
                 </tr>
             </thead>
             <tbody>
-                ${data.map(item => {
-                    const fotos = item.foto_url ? item.foto_url.split(', ') : [];
-                    const fotosHtml = fotos.map((u, i) => `<a href="${u}" target="_blank" class="mr-1">🖼️${i+1}</a>`).join('');
-                    return `
+                ${data.map(item => `
                     <tr class="border-b border-gray-200">
                         <td class="p-2">${new Date(item.created_at).toLocaleDateString()}</td>
                         <td class="p-2 font-bold">${item.nombre_ciudadano}</td>
                         <td class="p-2 uppercase">${item.sector}</td>
-                        <td class="p-2 text-center">${fotosHtml || '—'}</td>
-                        <td class="p-2 text-center text-base">${item.ubicacion?.includes('http') ? `<a href="${item.ubicacion}" target="_blank">📍</a>` : '—'}</td>
+                        <td class="p-2 text-center text-blue-600">${item.foto_url ? '✅ Ver' : '—'}</td>
+                        <td class="p-2 text-center">${item.ubicacion?.includes('http') ? `<a href="${item.ubicacion}" target="_blank">📍</a>` : '—'}</td>
                         <td class="p-2 italic truncate max-w-[100px]">${item.descripcion}</td>
-                        <td class="p-2 text-center font-bold text-blue-600">${item.estado}</td>
                         <td class="p-2 text-center">
-                            <div class="flex justify-center gap-1">
-                                ${item.estado !== 'Finalizado' ? `
-                                    <button onclick="window.cambiarEstado('${item.id}')" class="bg-green-600 text-white p-1 rounded">OK</button>
-                                    <button onclick="window.eliminarReporte('${item.id}')" class="bg-red-600 text-white p-1 rounded">X</button>
-                                ` : '✅'}
-                            </div>
+                            <button onclick="window.eliminarReporte('${item.id}')" class="bg-red-600 text-white p-1 rounded text-[8px]">BORRAR</button>
                         </td>
-                    </tr>`;
-                }).join('')}
+                    </tr>`).join('')}
             </tbody>
         </table>`;
 }
 
-window.cambiarEstado = async (id) => { 
-    await supabase.from('reportes').update({ estado: 'Finalizado' }).eq('id', id); 
-    actualizarTabla(); 
-};
-
 window.eliminarReporte = async (id) => { 
-    if(confirm("¿Eliminar este reporte permanentemente?")) { 
-        await supabase.from('reportes').delete().eq('id', id); 
-        actualizarTabla(); 
-    } 
+    if(confirm("¿Eliminar?")) { await supabase.from('reportes').delete().eq('id', id); actualizarTabla(); } 
 };
 
-// --- SINCRONIZACIÓN AUTOMÁTICA ---
+// --- SINCRONIZADOR AUTOMÁTICO REFORZADO ---
 async function sincronizarPendientes() {
     if (!navigator.onLine || !dbRequest.result) return;
-    
     const db = dbRequest.result;
     const tx = db.transaction("pendientes", "readonly");
     const store = tx.objectStore("pendientes");
@@ -213,11 +186,11 @@ async function sincronizarPendientes() {
             pendientes.push({ id: cursor.key, data: cursor.value });
             cursor.continue();
         } else if (pendientes.length > 0) {
-            console.log(`Sincronizando ${pendientes.length} reportes...`);
+            alert(`🔄 Detectada conexión. Sincronizando ${pendientes.length} reportes pendientes...`);
             for (const item of pendientes) {
                 try {
                     const urls = await Promise.all(item.data.fotos_binarias.map(f => procesarYSubir(f)));
-                    const { error } = await supabase.from('reportes').insert([{
+                    await supabase.from('reportes').insert([{
                         nombre_ciudadano: item.data.nombre_ciudadano,
                         sector: item.data.sector,
                         descripcion: item.data.descripcion,
@@ -225,16 +198,11 @@ async function sincronizarPendientes() {
                         foto_url: urls.join(', '),
                         estado: 'Pendiente'
                     }]);
-
-                    if (!error) {
-                        const deleteTx = db.transaction("pendientes", "readwrite");
-                        deleteTx.objectStore("pendientes").delete(item.id);
-                        console.log(`✅ Sincronizado: ${item.data.nombre_ciudadano}`);
-                    }
-                } catch (err) {
-                    console.error(`❌ Error en sincronización: ${err.message}`);
-                }
+                    const deleteTx = db.transaction("pendientes", "readwrite");
+                    deleteTx.objectStore("pendientes").delete(item.id);
+                } catch (err) { console.error("Error al sincronizar:", err); }
             }
+            alert("✅ Sincronización completa.");
             actualizarTabla();
         }
     };
