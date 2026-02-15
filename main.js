@@ -33,7 +33,7 @@ async function comprimirImagen(base64Str) {
             canvas.height = height;
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0, width, height);
-            // Comprimimos al 60% para que 3 fotos pesen menos de 1MB en total
+            // Calidad al 0.6 para asegurar que 3 fotos entren en los 5MB del localStorage
             resolve(canvas.toDataURL('image/jpeg', 0.6));
         };
     });
@@ -117,7 +117,7 @@ async function obtenerLinkMapa() {
     });
 }
 
-// 3. ENVÍO DEL CIUDADANO (ESTRATEGIA HÍBRIDA)
+// 3. ENVÍO DEL CIUDADANO (ESTRATEGIA HÍBRIDA OFFLINE/ONLINE)
 window.enviarReporte = async function() {
     const n = document.getElementById('nombre').value;
     const s = document.getElementById('sector').value;
@@ -134,7 +134,7 @@ window.enviarReporte = async function() {
         const gps = await obtenerLinkMapa();
 
         if (!navigator.onLine) {
-            // PROCESO OFFLINE CON COMPRESIÓN PARA LAS 3 FOTOS
+            // PROCESO OFFLINE CON COMPRESIÓN
             const fotosComprimidas = [];
             for (const file of listaFotos) {
                 const b64 = await new Promise(res => {
@@ -160,21 +160,23 @@ window.enviarReporte = async function() {
             pendientes.push(reporteOffline);
             localStorage.setItem('reportes_pendientes', JSON.stringify(pendientes));
 
-            alert("📡 Sin internet: Reporte guardado localmente con éxito. Se enviará al GAD automáticamente al recuperar conexión.");
+            alert("📡 Sin internet: Reporte guardado localmente. Se enviará cuando vuelvas a tener conexión.");
             location.reload();
             return;
         }
 
-        // PROCESO ONLINE NORMAL
-        const subidas = listaFotos.map(file => subirFoto(file));
-        const urlsFinales = await Promise.all(subidas);
+        // PROCESO ONLINE
+        const subidas = [];
+        for (const f of listaFotos) {
+            subidas.push(await subirFoto(f));
+        }
         
         const { error } = await supabase.from('reportes').insert([{ 
             nombre_ciudadano: n, 
             sector: s, 
             descripcion: d, 
             ubicacion: gps, 
-            foto_url: urlsFinales.join(', '), 
+            foto_url: subidas.join(', '), 
             estado: 'Pendiente' 
         }]);
 
