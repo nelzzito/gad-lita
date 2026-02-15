@@ -1,26 +1,25 @@
-const CACHE_NAME = 'gad-lita-plus-v1';
+const CACHE_NAME = 'gad-lita-v2';
 
-// Archivos críticos que se guardarán para funcionar sin internet
+// Archivos básicos para que la app cargue sin internet
 const assets = [
   './',
   './index.html',
   './main.js',
-  './style.css',
-  './logo.png', // Asegúrate de que el nombre coincida con tu archivo
-  './manifest.json'
+  './manifest.json',
+  './logo.png'
 ];
 
-// 1. INSTALACIÓN: Guarda los archivos en la memoria del celular/PC
+// 1. INSTALACIÓN: Guarda los archivos en el caché del dispositivo
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
-      console.log('Cache abierto: Guardando archivos para modo offline');
+      console.log('Cache abierto: Archivos guardados');
       return cache.addAll(assets);
     })
   );
 });
 
-// 2. ACTIVACIÓN: Limpia versiones viejas de la app
+// 2. ACTIVACIÓN: Elimina versiones antiguas del caché para evitar conflictos
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(keys => {
@@ -31,19 +30,21 @@ self.addEventListener('activate', event => {
   );
 });
 
-// 3. ESTRATEGIA DE CARGA: ¿De dónde saco la información?
+// 3. ESTRATEGIA DE CARGA (FETCH):
 self.addEventListener('fetch', event => {
-  // EXCEPCIÓN: Si la petición es para Supabase, NO usar caché (dejar que main.js lo maneje)
-  if (event.request.url.includes('supabase.co')) {
-    return;
+  const url = event.request.url;
+
+  // EXCEPCIÓN CRÍTICA: Si la petición va hacia Supabase (Base de Datos o Storage), 
+  // NO debe pasar por el caché. Esto permite que las subidas (POST) no fallen.
+  if (url.includes('supabase.co')) {
+    return; 
   }
 
   event.respondWith(
     caches.match(event.request).then(response => {
-      // Si está en caché, lo devuelve. Si no, lo busca en internet.
+      // Devuelve el archivo si está en caché, de lo contrario lo busca en internet
       return response || fetch(event.request).catch(() => {
-        // Si falla internet y no está en caché (ej. una imagen externa), no hace nada
-        console.log("Archivo no encontrado en caché y no hay internet.");
+        console.log("Modo offline: Archivo no disponible en caché.");
       });
     })
   );
