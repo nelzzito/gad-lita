@@ -4,28 +4,31 @@ const supabaseUrl = 'https://hnqshnbdndsvurffrpjs.supabase.co'
 const supabaseKey = 'sb_publishable_wgDPu5O49WPdWsm_xE_jmA_hJ4PoEXp'
 const supabase = createClient(supabaseUrl, supabaseKey)
 
-let listaFotos = []; 
+let listaFotos = []; // Almacén temporal de archivos
 
-// --- BODEGA OFFLINE (IndexedDB) ---
-const dbRequest = indexedDB.open("BodegaReportesLita", 1);
-dbRequest.onupgradeneeded = e => {
-    e.target.result.createObjectStore("pendientes", { autoIncrement: true });
-};
-
-// --- GESTIÓN DE FOTOS ---
+// --- LÓGICA DE FOTOS (AÑADIR Y BORRAR) ---
 const fotoInput = document.getElementById('fotoInput');
 if (fotoInput) {
-    fotoInput.addEventListener('change', e => {
+    fotoInput.addEventListener('change', function(e) {
         const file = e.target.files[0];
-        if (!file || listaFotos.length >= 3) return;
+        if (!file) return;
+
+        if (listaFotos.length >= 3) {
+            alert("⚠️ Máximo 3 fotos por reporte.");
+            return;
+        }
+
         listaFotos.push(file);
         actualizarMiniaturas();
+        e.target.value = ""; // Reset para permitir subir la misma foto si se borra
     });
 }
 
 function actualizarMiniaturas() {
     const cont = document.getElementById('previsualizacion');
+    const btnCapturar = document.getElementById('btnCapturar');
     if (!cont) return;
+    
     cont.innerHTML = "";
     listaFotos.forEach((foto, index) => {
         const reader = new FileReader();
@@ -33,109 +36,101 @@ function actualizarMiniaturas() {
             const div = document.createElement('div');
             div.className = "relative h-20 w-full";
             div.innerHTML = `
-                <img src="${e.target.result}" class="h-full w-full object-cover rounded-lg border border-blue-200">
-                <button onclick="quitarFoto(${index})" class="absolute -top-2 -right-2 bg-red-600 text-white rounded-full w-5 h-5 text-[10px] font-bold flex items-center justify-center border border-white">X</button>
+                <img src="${e.target.result}" class="h-full w-full object-cover rounded-lg border border-blue-200 shadow-sm">
+                <button onclick="quitarFoto(${index})" class="absolute -top-2 -right-2 bg-red-600 text-white rounded-full w-5 h-5 text-[10px] font-bold flex items-center justify-center shadow-lg border border-white">X</button>
             `;
             cont.appendChild(div);
         };
         reader.readAsDataURL(foto);
     });
+
+    if (btnCapturar) {
+        btnCapturar.style.display = listaFotos.length >= 3 ? 'none' : 'flex';
+    }
 }
 
-window.quitarFoto = (index) => {
+window.quitarFoto = function(index) {
     listaFotos.splice(index, 1);
     actualizarMiniaturas();
 };
 
-// --- COMPRESIÓN Y SUBIDA ---
-async function procesarYSubir(archivo) {
-    const bitmap = await createImageBitmap(archivo);
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    const escala = Math.min(1200 / bitmap.width, 1200 / bitmap.height, 1);
-    canvas.width = bitmap.width * escala;
-    canvas.height = bitmap.height * escala;
-    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.7));
-    const nombre = `${Date.now()}_${Math.random().toString(36).substr(2, 5)}.jpg`;
-    const { data, error } = await supabase.storage.from('fotos_reportes').upload(nombre, blob);
-    if (error) throw error;
-    return (supabase.storage.from('fotos_reportes').getPublicUrl(nombre)).data.publicUrl;
+// --- SUBIDA AL STORAGE ---
+async function subirFoto(archivo) {
+    const nombreArchivo = `${Date.now()}_${archivo.name}`;
+    const { data, error } = await supabase.storage
+        .from('fotos_reportes')
+        .upload(nombreArchivo, archivo);
+    
+    if (error) throw new Error("Error al subir una de las imágenes");
+    
+    const { data: urlData } = supabase.storage.from('fotos_reportes').getPublicUrl(nombreArchivo);
+    return urlData.publicUrl;
 }
 
-// --- GPS CORREGIDO ---
+// 2. GPS
 async function obtenerLinkMapa() {
     return new Promise((resolve) => {
         if (!navigator.geolocation) resolve("No soportado");
-        navigator.geolocation.getCurrentPosition(
-            (p) => resolve(`https://www.google.com/maps?q=${p.coords.latitude},${p.coords.longitude}`),
-            () => resolve("Ubicación no proporcionada"), { timeout: 8000, enableHighAccuracy: true }
-        );
+        else {
+            navigator.geolocation.getCurrentPosition(
+                (p) => resolve(`https://www.google.com/maps?q=${p.coords.latitude},${p.coords.longitude}`),
+                () => resolve("No proporcionada"), { timeout: 8000 }
+            );
+        }
     });
 }
 
-// --- ENVÍO DE REPORTE ---
+// 3. ENVÍO DEL CIUDADANO
 window.enviarReporte = async function() {
     const n = document.getElementById('nombre').value;
     const s = document.getElementById('sector').value;
     const d = document.getElementById('detalle').value;
     
-    if (!n || !s || !d || listaFotos.length === 0) return alert("⚠️ Complete todos los campos y añada al menos una foto.");
-
-    const gps = await obtenerLinkMapa();
-
-    // Lógica Offline
-    if (!navigator.onLine) {
-        const db = dbRequest.result;
-        const tx = db.transaction("pendientes", "readwrite");
-        tx.objectStore("pendientes").add({ 
-            nombre_ciudadano: n, sector: s, descripcion: d, 
-            ubicacion: gps, fotos_binarias: listaFotos, 
-            estado: 'Pendiente', created_at: new Date().toISOString()
-        });
-        alert("📡 MODO SIN INTERNET: Reporte guardado en el teléfono. Se subirá automáticamente cuando detecte conexión.");
-        location.reload();
-        return;
+    if (!n || !s || !d || listaFotos.length === 0) {
+        return alert("⚠️ Complete todos los campos e incluya al menos una foto.");
     }
 
     const btn = document.querySelector("button[onclick='enviarReporte()']");
-    btn.disabled = true; btn.innerText = "Subiendo... ⏳";
+    if(btn) { btn.disabled = true; btn.innerText = "Subiendo Evidencias... ⏳"; }
 
     try {
-        const urls = await Promise.all(listaFotos.map(f => procesarYSubir(f)));
-        const { error } = await supabase.from('reportes').insert([{ 
-            nombre_ciudadano: n, sector: s, descripcion: d, 
-            ubicacion: gps, foto_url: urls.join(', '), estado: 'Pendiente' 
-        }]);
+        // Subir todas las fotos en paralelo
+        const subidas = listaFotos.map(file => subirFoto(file));
+        const urlsFinales = await Promise.all(subidas);
+        
+        const gps = await obtenerLinkMapa();
+        
+        const nuevoReporte = { 
+            nombre_ciudadano: n, 
+            sector: s, 
+            descripcion: d, 
+            ubicacion: gps, 
+            foto_url: urlsFinales.join(', '), // Links separados por coma
+            estado: 'Pendiente' 
+        };
+
+        const { error } = await supabase.from('reportes').insert([nuevoReporte]);
         if (error) throw error;
-        alert("✅ Reporte enviado exitosamente.");
+        
+        alert("✅ Reporte enviado con éxito.");
         location.reload(); 
     } catch (e) {
-        alert("❌ Error: " + e.message);
-        btn.disabled = false; btn.innerText = "Enviar al GAD";
+        alert("❌ " + e.message);
+        if(btn) { btn.disabled = false; btn.innerText = "Enviar al GAD"; }
     }
 };
 
-// --- ADMINISTRACIÓN Y EXCEL ---
+// 4. ADMINISTRACIÓN
 window.verificarAdmin = function() {
-    if (prompt("Clave:") === "LITA2026") {
+    const clave = prompt("Clave de acceso:");
+    if (clave === "LITA2026") {
         document.getElementById('panelAdmin').classList.remove('hidden');
-        document.getElementById('btnAccesoAdmin')?.classList.add('hidden');
+        if (document.getElementById('btnAccesoAdmin')) document.getElementById('btnAccesoAdmin').classList.add('hidden');
         actualizarTabla();
     } else { alert("Clave incorrecta"); }
 };
 
-window.exportarExcel = async function() {
-    const { data, error } = await supabase.from('reportes').select('*').order('created_at', { ascending: false });
-    if (error) return alert("Error al exportar: " + error.message);
-    
-    // Requiere la librería SheetJS en el HTML
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Reportes");
-    XLSX.writeFile(wb, "Reportes_GAD_LITA.xlsx");
-};
-
+// 5. TABLA WEB
 async function actualizarTabla() {
     const { data, error } = await supabase.from('reportes').select('*').order('created_at', { ascending: false });
     const cont = document.getElementById('tablaReportes');
@@ -145,68 +140,128 @@ async function actualizarTabla() {
         <table class="w-full text-left text-[10px] border-collapse">
             <thead class="bg-gray-200 text-gray-800 uppercase font-black border-b border-gray-400">
                 <tr>
-                    <th class="p-2">FECHA</th><th class="p-2">CIUDADANO</th><th class="p-2">SECTOR</th>
-                    <th class="p-2 text-center">FOTOS</th><th class="p-2 text-center">MAPA</th>
-                    <th class="p-2">DETALLE</th><th class="p-2 text-center">ACCIONES</th>
+                    <th class="p-2">FECHA</th>
+                    <th class="p-2">CIUDADANO</th>
+                    <th class="p-2">SECTOR</th>
+                    <th class="p-2 text-center">FOTOS</th>
+                    <th class="p-2 text-center">MAPA</th>
+                    <th class="p-2">DETALLE</th>
+                    <th class="p-2 text-center">ESTADO</th>
+                    <th class="p-2 text-center">ACCIONES</th>
                 </tr>
             </thead>
             <tbody>
-                ${data.map(item => `
+                ${data.map(item => {
+                    // Lógica para mostrar múltiples fotos en la tabla
+                    const fotos = item.foto_url ? item.foto_url.split(', ') : [];
+                    const fotosHtml = fotos.map((url, i) => `<a href="${url}" target="_blank" class="mr-1">🖼️${i+1}</a>`).join('');
+
+                    return `
                     <tr class="border-b border-gray-200">
-                        <td class="p-2">${new Date(item.created_at).toLocaleDateString()}</td>
-                        <td class="p-2 font-bold">${item.nombre_ciudadano}</td>
-                        <td class="p-2 uppercase">${item.sector}</td>
-                        <td class="p-2 text-center text-blue-600">${item.foto_url ? '✅ Ver' : '—'}</td>
-                        <td class="p-2 text-center">${item.ubicacion?.includes('http') ? `<a href="${item.ubicacion}" target="_blank">📍</a>` : '—'}</td>
-                        <td class="p-2 italic truncate max-w-[100px]">${item.descripcion}</td>
-                        <td class="p-2 text-center">
-                            <button onclick="window.eliminarReporte('${item.id}')" class="bg-red-600 text-white p-1 rounded text-[8px]">BORRAR</button>
+                        <td class="p-2 text-gray-600">${new Date(item.created_at).toLocaleDateString()}</td>
+                        <td class="p-2 font-bold text-blue-900">${item.nombre_ciudadano}</td>
+                        <td class="p-2 text-gray-700 uppercase font-semibold">${item.sector}</td>
+                        <td class="p-2 text-center">${fotosHtml || '—'}</td>
+                        <td class="p-2 text-center text-base">
+                            ${item.ubicacion && item.ubicacion.includes('http') 
+                                ? `<a href="${item.ubicacion}" target="_blank">📍</a>` 
+                                : '<span class="text-gray-400 text-[8px]">N/A</span>'}
                         </td>
-                    </tr>`).join('')}
+                        <td class="p-2 text-gray-500 italic max-w-[150px] truncate">${item.descripcion}</td>
+                        <td class="p-2 text-center">
+                            <span class="px-2 py-0.5 rounded shadow-sm font-black text-[8px] border ${
+                                item.estado === 'Finalizado' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-yellow-50 text-yellow-800 border-yellow-200'
+                            }">${item.estado}</span>
+                        </td>
+                        <td class="p-2 text-center">
+                            <div class="flex justify-center gap-1">
+                                ${item.estado !== 'Finalizado' ? `
+                                    <button onclick="window.cambiarEstado('${item.id}')" class="bg-green-600 text-white font-bold text-[8px] py-1 px-2 rounded">OK</button>
+                                    <button onclick="window.eliminarReporte('${item.id}')" class="bg-red-600 text-white font-bold text-[8px] py-1 px-2 rounded">X</button>
+                                ` : '✅'}
+                            </div>
+                        </td>
+                    </tr>`;
+                }).join('')}
             </tbody>
         </table>`;
 }
 
-window.eliminarReporte = async (id) => { 
-    if(confirm("¿Eliminar?")) { await supabase.from('reportes').delete().eq('id', id); actualizarTabla(); } 
+// 6. ACCIONES
+window.cambiarEstado = async (id) => {
+    await supabase.from('reportes').update({ estado: 'Finalizado' }).eq('id', id);
+    actualizarTabla();
 };
 
-// --- SINCRONIZADOR AUTOMÁTICO REFORZADO ---
-async function sincronizarPendientes() {
-    if (!navigator.onLine || !dbRequest.result) return;
-    const db = dbRequest.result;
-    const tx = db.transaction("pendientes", "readonly");
-    const store = tx.objectStore("pendientes");
-    const pendientes = [];
+window.eliminarReporte = async (id) => {
+    if(confirm("¿Eliminar reporte?")) {
+        await supabase.from('reportes').delete().eq('id', id);
+        actualizarTabla();
+    }
+};
 
-    const request = store.openCursor();
-    request.onsuccess = async e => {
-        const cursor = e.target.result;
-        if (cursor) {
-            pendientes.push({ id: cursor.key, data: cursor.value });
-            cursor.continue();
-        } else if (pendientes.length > 0) {
-            alert(`🔄 Detectada conexión. Sincronizando ${pendientes.length} reportes pendientes...`);
-            for (const item of pendientes) {
-                try {
-                    const urls = await Promise.all(item.data.fotos_binarias.map(f => procesarYSubir(f)));
-                    await supabase.from('reportes').insert([{
-                        nombre_ciudadano: item.data.nombre_ciudadano,
-                        sector: item.data.sector,
-                        descripcion: item.data.descripcion,
-                        ubicacion: item.data.ubicacion,
-                        foto_url: urls.join(', '),
-                        estado: 'Pendiente'
-                    }]);
-                    const deleteTx = db.transaction("pendientes", "readwrite");
-                    deleteTx.objectStore("pendientes").delete(item.id);
-                } catch (err) { console.error("Error al sincronizar:", err); }
-            }
-            alert("✅ Sincronización completa.");
-            actualizarTabla();
-        }
-    };
+// 7. EXPORTAR EXCEL (MANTENIDO)
+window.exportarExcel = async function() {
+    const { data, error } = await supabase.from('reportes').select('*').order('created_at', { ascending: false });
+    if (error) return alert("Error al obtener datos");
+
+    let xmlRows = "";
+    data.forEach(r => {
+        const f = new Date(r.created_at).toLocaleString();
+        xmlRows += `
+        <Row>
+            <Cell ss:StyleID="sDatos"><Data ss:Type="String">${f}</Data></Cell>
+            <Cell ss:StyleID="sDatos"><Data ss:Type="String">${r.nombre_ciudadano}</Data></Cell>
+            <Cell ss:StyleID="sDatos"><Data ss:Type="String">${r.sector}</Data></Cell>
+            <Cell ss:StyleID="sDatos"><Data ss:Type="String">${r.descripcion}</Data></Cell>
+            <Cell ss:StyleID="sDatos"><Data ss:Type="String">${r.estado}</Data></Cell>
+            <Cell ss:StyleID="sDatos" ss:HRef="${r.ubicacion}"><Data ss:Type="String">VER MAPA</Data></Cell>
+        </Row>`;
+    });
+
+    const excelTemplate = `<?xml version="1.0"?><?mso-application progid="Excel.Sheet"?>
+    <Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+     <Styles>
+      <Style ss:ID="sTitulo"><Alignment ss:Horizontal="Center" ss:Vertical="Center"/><Font ss:FontName="Arial" ss:Size="14" ss:Bold="1" ss:Color="#228B22"/></Style>
+      <Style ss:ID="sHeader"><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/></Borders><Font ss:Bold="1"/><Interior ss:Color="#D3D3D3" ss:Pattern="Solid"/></Style>
+      <Style ss:ID="sDatos"><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/></Borders></Style>
+     </Styles>
+     <Worksheet ss:Name="Reportes">
+      <Table ss:ExpandedColumnCount="6">
+       <Column ss:Width="110"/><Column ss:Width="150"/><Column ss:Width="120"/><Column ss:Width="250"/><Column ss:Width="80"/><Column ss:Width="100"/>
+       <Row ss:Height="30"><Cell ss:MergeAcross="5" ss:StyleID="sTitulo"><Data ss:Type="String">🛡️ REPORTE GAD LITA</Data></Cell></Row>
+       <Row ss:Height="20">
+        <Cell ss:StyleID="sHeader"><Data ss:Type="String">FECHA</Data></Cell>
+        <Cell ss:StyleID="sHeader"><Data ss:Type="String">CIUDADANO</Data></Cell>
+        <Cell ss:StyleID="sHeader"><Data ss:Type="String">SECTOR</Data></Cell>
+        <Cell ss:StyleID="sHeader"><Data ss:Type="String">DETALLE</Data></Cell>
+        <Cell ss:StyleID="sHeader"><Data ss:Type="String">ESTADO</Data></Cell>
+        <Cell ss:StyleID="sHeader"><Data ss:Type="String">UBICACIÓN GPS</Data></Cell>
+       </Row>
+       ${xmlRows}
+      </Table>
+     </Worksheet>
+    </Workbook>`;
+
+    const blob = new Blob([excelTemplate], { type: "application/vnd.ms-excel" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `Reporte_Lita.xls`;
+    link.click();
+};
+
+// 8. SINCRONIZADOR
+async function sincronizarPendientes() {
+    if (!navigator.onLine) return;
+    let pendientes = JSON.parse(localStorage.getItem('reportes_pendientes') || "[]");
+    if (pendientes.length === 0) return;
+    for (let i = 0; i < pendientes.length; i++) {
+        const { error } = await supabase.from('reportes').insert([pendientes[i]]);
+        if (!error) { pendientes.splice(i, 1); i--; }
+    }
+    localStorage.setItem('reportes_pendientes', JSON.stringify(pendientes));
 }
 
-window.addEventListener('online', () => setTimeout(sincronizarPendientes, 3000));
-setTimeout(sincronizarPendientes, 3000);
+window.addEventListener('online', sincronizarPendientes);
+sincronizarPendientes();

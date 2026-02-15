@@ -1,25 +1,26 @@
-const CACHE_NAME = 'gad-lita-plus-v4'; // Versión limpia
+const CACHE_NAME = 'gad-lita-plus-v1';
 
+// Archivos críticos que se guardarán para funcionar sin internet
 const assets = [
-  '/',
-  '/index.html',
-  '/main.js',
-  '/manifest.json',
-  'https://cdn.tailwindcss.com'
+  './',
+  './index.html',
+  './main.js',
+  './style.css',
+  './logo.png', // Asegúrate de que el nombre coincida con tu archivo
+  './manifest.json'
 ];
 
-// 1. INSTALACIÓN: Guarda solo lo estrictamente necesario
+// 1. INSTALACIÓN: Guarda los archivos en la memoria del celular/PC
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
-      console.log('✅ SW V4: Caché de seguridad preparada');
+      console.log('Cache abierto: Guardando archivos para modo offline');
       return cache.addAll(assets);
     })
   );
-  self.skipWaiting();
 });
 
-// 2. ACTIVACIÓN: Elimina cualquier rastro de V1, V2 o V3
+// 2. ACTIVACIÓN: Limpia versiones viejas de la app
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(keys => {
@@ -28,31 +29,22 @@ self.addEventListener('activate', event => {
       );
     })
   );
-  self.clients.claim();
 });
 
-// 3. ESTRATEGIA: Network First (Priorizar red para evitar código viejo)
+// 3. ESTRATEGIA DE CARGA: ¿De dónde saco la información?
 self.addEventListener('fetch', event => {
-  if (event.request.method !== 'GET') return;
-
-  // No interferir con las subidas de Supabase (importante para las fotos)
-  if (event.request.url.includes('supabase.co')) return;
+  // EXCEPCIÓN: Si la petición es para Supabase, NO usar caché (dejar que main.js lo maneje)
+  if (event.request.url.includes('supabase.co')) {
+    return;
+  }
 
   event.respondWith(
-    fetch(event.request)
-      .then(response => {
-        // Si hay red, actualizamos la caché con lo más nuevo
-        const resClone = response.clone();
-        caches.open(CACHE_NAME).then(cache => {
-          if (!event.request.url.includes('chrome-extension')) {
-            cache.put(event.request, resClone);
-          }
-        });
-        return response;
-      })
-      .catch(() => {
-        // Si falla la red (offline), entregar lo que tengamos en caché
-        return caches.match(event.request);
-      })
+    caches.match(event.request).then(response => {
+      // Si está en caché, lo devuelve. Si no, lo busca en internet.
+      return response || fetch(event.request).catch(() => {
+        // Si falla internet y no está en caché (ej. una imagen externa), no hace nada
+        console.log("Archivo no encontrado en caché y no hay internet.");
+      });
+    })
   );
 });
