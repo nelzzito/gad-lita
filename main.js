@@ -1,3 +1,4 @@
+
 // 1. CONFIGURACIÓN SUPABASE
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
 const supabaseUrl = 'https://hnqshnbdndsvurffrpjs.supabase.co'
@@ -71,7 +72,7 @@ async function procesarYSubir(archivo) {
     return (supabase.storage.from('fotos_reportes').getPublicUrl(nombre)).data.publicUrl;
 }
 
-// 2. GPS
+// 2. GPS (CORREGIDO)
 async function obtenerLinkMapa() {
     return new Promise((resolve) => {
         if (!navigator.geolocation) resolve("No soportado");
@@ -108,7 +109,7 @@ window.enviarReporte = async function() {
             created_at: new Date().toISOString()
         });
 
-        alert("📡 MODO OFFLINE: Reporte guardado. Se subirá al recuperar internet.");
+        alert("📡 MODO OFFLINE: Reporte guardado localmente. Se subirá al recuperar internet.");
         location.reload();
         return;
     }
@@ -124,11 +125,12 @@ window.enviarReporte = async function() {
             ubicacion: gps, foto_url: urls.join(', '), estado: 'Pendiente' 
         }]);
         if (error) throw error;
-        alert("✅ Reporte enviado.");
+        alert("✅ Reporte enviado con éxito.");
         location.reload(); 
     } catch (e) {
-        alert("❌ Error: " + e.message);
+        alert("❌ Error de envío: " + e.message);
         btn.disabled = false;
+        btn.innerText = "Enviar al GAD";
     }
 };
 
@@ -183,17 +185,23 @@ async function actualizarTabla() {
         </table>`;
 }
 
-window.cambiarEstado = async (id) => { await supabase.from('reportes').update({ estado: 'Finalizado' }).eq('id', id); actualizarTabla(); };
-window.eliminarReporte = async (id) => { if(confirm("¿Eliminar?")) { await supabase.from('reportes').delete().eq('id', id); actualizarTabla(); } };
+window.cambiarEstado = async (id) => { 
+    await supabase.from('reportes').update({ estado: 'Finalizado' }).eq('id', id); 
+    actualizarTabla(); 
+};
 
-// --- SINCRONIZACIÓN REFORZADA (CORREGIDA) ---
-// --- SISTEMA DE SINCRONIZACIÓN PROFESIONAL (SIN ADIVINANZAS) ---
+window.eliminarReporte = async (id) => { 
+    if(confirm("¿Eliminar este reporte permanentemente?")) { 
+        await supabase.from('reportes').delete().eq('id', id); 
+        actualizarTabla(); 
+    } 
+};
+
+// --- SINCRONIZACIÓN AUTOMÁTICA ---
 async function sincronizarPendientes() {
-    if (!navigator.onLine) return;
+    if (!navigator.onLine || !dbRequest.result) return;
     
     const db = dbRequest.result;
-    if (!db) return;
-
     const tx = db.transaction("pendientes", "readonly");
     const store = tx.objectStore("pendientes");
     const pendientes = [];
@@ -204,21 +212,11 @@ async function sincronizarPendientes() {
         if (cursor) {
             pendientes.push({ id: cursor.key, data: cursor.value });
             cursor.continue();
-        } else {
-            if (pendientes.length === 0) return;
-
-            console.log(`Intentando subir ${pendientes.length} reportes...`);
-
+        } else if (pendientes.length > 0) {
+            console.log(`Sincronizando ${pendientes.length} reportes...`);
             for (const item of pendientes) {
                 try {
-                    // 1. Subida de fotos con verificación
-                    const urls = await Promise.all(item.data.fotos_binarias.map(async (f) => {
-                        const url = await procesarYSubir(f);
-                        if (!url) throw new Error("Error al obtener URL de la foto");
-                        return url;
-                    }));
-
-                    // 2. Inserción en tabla
+                    const urls = await Promise.all(item.data.fotos_binarias.map(f => procesarYSubir(f)));
                     const { error } = await supabase.from('reportes').insert([{
                         nombre_ciudadano: item.data.nombre_ciudadano,
                         sector: item.data.sector,
@@ -228,25 +226,19 @@ async function sincronizarPendientes() {
                         estado: 'Pendiente'
                     }]);
 
-                    if (error) {
-                        alert(`❌ ERROR DE SUPABASE: ${error.message}`);
-                        return; // Detener para no perder datos
+                    if (!error) {
+                        const deleteTx = db.transaction("pendientes", "readwrite");
+                        deleteTx.objectStore("pendientes").delete(item.id);
+                        console.log(`✅ Sincronizado: ${item.data.nombre_ciudadano}`);
                     }
-
-                    // 3. Borrado local solo si Supabase confirmó éxito
-                    const deleteTx = db.transaction("pendientes", "readwrite");
-                    deleteTx.objectStore("pendientes").delete(item.id);
-                    
-                    alert(`✅ Reporte de ${item.data.nombre_ciudadano} sincronizado con éxito.`);
                 } catch (err) {
-                    alert(`❌ FALLO CRÍTICO: ${err.message}. Verifica las políticas de Storage en Supabase.`);
-                    break; 
+                    console.error(`❌ Error en sincronización: ${err.message}`);
                 }
             }
-            actualizarTabla(); // Refresca la vista de admin si está abierta
+            actualizarTabla();
         }
     };
 }
 
-window.addEventListener('online', sincronizarPendientes);
-setTimeout(sincronizarPendientes, 4000);
+window.addEventListener('online', () => setTimeout(sincronizarPendientes, 3000));
+setTimeout(sincronizarPendientes, 3000);
