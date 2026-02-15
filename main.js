@@ -190,13 +190,28 @@ window.enviarReporte = async function() {
     }
 };
 
-// 4. ADMINISTRACIÓN
+// 4. ADMINISTRACIÓN (ACTUALIZADO CON REALTIME)
 window.verificarAdmin = function() {
     const clave = prompt("Clave de acceso:");
     if (clave === "LITA2026") {
         document.getElementById('panelAdmin').classList.remove('hidden');
         if (document.getElementById('btnAccesoAdmin')) document.getElementById('btnAccesoAdmin').classList.add('hidden');
+        
+        // Carga inicial
         actualizarTabla();
+
+        // ACTIVAR ACTUALIZACIÓN EN TIEMPO REAL
+        supabase.channel('cambios_reportes')
+            .on('postgres_changes', { 
+                event: '*', 
+                schema: 'public', 
+                table: 'reportes' 
+            }, (payload) => {
+                console.log('Cambio detectado en tiempo real');
+                actualizarTabla(); // Se refresca sola la tabla
+            })
+            .subscribe();
+
     } else { alert("Clave incorrecta"); }
 };
 
@@ -259,13 +274,13 @@ async function actualizarTabla() {
 // 6. ACCIONES
 window.cambiarEstado = async (id) => {
     await supabase.from('reportes').update({ estado: 'Finalizado' }).eq('id', id);
-    actualizarTabla();
+    // Nota: El Realtime llamará a actualizarTabla() automáticamente tras el update
 };
 
 window.eliminarReporte = async (id) => {
     if(confirm("¿Eliminar reporte?")) {
         await supabase.from('reportes').delete().eq('id', id);
-        actualizarTabla();
+        // Nota: El Realtime llamará a actualizarTabla() automáticamente tras el delete
     }
 };
 
