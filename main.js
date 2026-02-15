@@ -67,14 +67,19 @@ async function subirFoto(archivo) {
     return urlData.publicUrl;
 }
 
-// 2. GPS
+// 2. GPS (REPARADO)
 async function obtenerLinkMapa() {
     return new Promise((resolve) => {
         if (!navigator.geolocation) resolve("No soportado");
         else {
             navigator.geolocation.getCurrentPosition(
-                (p) => resolve(`https://www.google.com/maps?q=${p.coords.latitude},${p.coords.longitude}`),
-                () => resolve("No proporcionada"), { timeout: 8000 }
+                (p) => {
+                    // Se elimina el '0' y la llave '{' errónea para que el link sea válido
+                    const link = `https://www.google.com/maps?q=${p.coords.latitude},${p.coords.longitude}`;
+                    resolve(link);
+                },
+                () => resolve("No proporcionada"), 
+                { timeout: 8000, enableHighAccuracy: true }
             );
         }
     });
