@@ -20,7 +20,7 @@ if (fotoInput) {
 
         listaFotos.push(file);
         actualizarMiniaturas();
-        e.target.value = ""; // Reset para permitir subir la misma foto si se borra
+        e.target.value = ""; 
     });
 }
 
@@ -67,14 +67,13 @@ async function subirFoto(archivo) {
     return urlData.publicUrl;
 }
 
-// 2. GPS (REPARADO Y OPTIMIZADO)
+// 2. GPS (CORREGIDO)
 async function obtenerLinkMapa() {
     return new Promise((resolve) => {
         if (!navigator.geolocation) resolve("No soportado");
         else {
             navigator.geolocation.getCurrentPosition(
                 (p) => {
-                    // Formato correcto para Google Maps sin caracteres extraños
                     const link = `https://www.google.com/maps?q=${p.coords.latitude},${p.coords.longitude}`;
                     resolve(link);
                 },
@@ -85,7 +84,7 @@ async function obtenerLinkMapa() {
     });
 }
 
-// 3. ENVÍO DEL CIUDADANO (CORREGIDO PARA FOTOS OFFLINE)
+// 3. ENVÍO DEL CIUDADANO (REPARADO PARA OFFLINE)
 window.enviarReporte = async function() {
     const n = document.getElementById('nombre').value;
     const s = document.getElementById('sector').value;
@@ -98,23 +97,22 @@ window.enviarReporte = async function() {
     const btn = document.querySelector("button[onclick='enviarReporte()']");
     if(btn) { btn.disabled = true; btn.innerText = "Procesando... ⏳"; }
 
-    // --- LLAVE DE PASO OFFLINE (ELIMINA EL ERROR DE TU IMAGEN) ---
+    // BLOQUE DE SEGURIDAD OFFLINE: Si no hay internet, guardar y salir.
     if (!navigator.onLine) {
         try {
-            // Convertimos fotos a Base64 inmediatamente sin tocar Supabase
-            const promesasFotos = listaFotos.map(file => new Promise((resolve) => {
-                const reader = new FileReader();
-                reader.onload = (e) => resolve(e.target.result);
-                reader.readAsDataURL(file);
+            const promesasBase64 = listaFotos.map(file => new Promise((res) => {
+                const r = new FileReader();
+                r.onload = (e) => res(e.target.result);
+                r.readAsDataURL(file);
             }));
-            const fotosEnTexto = await Promise.all(promesasFotos);
+            const fotosB64 = await Promise.all(promesasBase64);
 
-            const reporteOffline = { 
-                nombre_ciudadano: n, 
-                sector: s, 
-                descripcion: d, 
-                ubicacion: "Pendiente (GPS Offline)", 
-                foto_url: fotosEnTexto, // Datos reales de la imagen
+            const reporteOffline = {
+                nombre_ciudadano: n,
+                sector: s,
+                descripcion: d,
+                ubicacion: "Pendiente (Capturado Offline)",
+                foto_url: fotosB64, 
                 estado: 'Pendiente',
                 created_at: new Date().toISOString()
             };
@@ -122,43 +120,39 @@ window.enviarReporte = async function() {
             let pendientes = JSON.parse(localStorage.getItem('reportes_pendientes') || "[]");
             pendientes.push(reporteOffline);
             localStorage.setItem('reportes_pendientes', JSON.stringify(pendientes));
-            
-            alert("📡 MODO OFFLINE: Reporte guardado en el teléfono. Se enviará solo cuando detecte internet.");
+
+            alert("📡 Sin internet: Reporte guardado localmente. Se enviará al GAD automáticamente al recuperar conexión.");
             location.reload();
-            return; // DETIENE TODO AQUÍ, no llega nunca a 'subirFoto'
-        } catch (err) {
-            alert("Error local: " + err.message);
+            return; 
+        } catch (e) {
+            alert("Error local: " + e.message);
             if(btn) { btn.disabled = false; btn.innerText = "Enviar al GAD"; }
             return;
         }
     }
 
-    // --- LOGICA ONLINE (SOLO SE EJECUTA SI HAY INTERNET) ---
+    // PROCESO ONLINE NORMAL
     try {
         const gps = await obtenerLinkMapa();
-        
-        // Aquí sí intentamos subir a Supabase porque sabemos que hay red
         const subidas = listaFotos.map(file => subirFoto(file));
         const urlsFinales = await Promise.all(subidas);
         
-        const reporteOnline = { 
+        const nuevoReporte = { 
             nombre_ciudadano: n, 
             sector: s, 
             descripcion: d, 
             ubicacion: gps, 
             foto_url: urlsFinales.join(', '), 
-            estado: 'Pendiente',
-            created_at: new Date().toISOString()
+            estado: 'Pendiente' 
         };
 
-        const { error } = await supabase.from('reportes').insert([reporteOnline]);
+        const { error } = await supabase.from('reportes').insert([nuevoReporte]);
         if (error) throw error;
-
+        
         alert("✅ Reporte enviado con éxito.");
         location.reload(); 
     } catch (e) {
-        // Este es el error que te salía, ahora solo saldrá si falla el internet REALMENTE durante la subida
-        alert("❌ Error de conexión: " + e.message);
+        alert("❌ Error: " + e.message);
         if(btn) { btn.disabled = false; btn.innerText = "Enviar al GAD"; }
     }
 };
@@ -173,7 +167,7 @@ window.verificarAdmin = function() {
     } else { alert("Clave incorrecta"); }
 };
 
-// 5. TABLA WEB (VISUALIZACIÓN DE FOTOS MEJORADA)
+// 5. TABLA WEB
 async function actualizarTabla() {
     const { data, error } = await supabase.from('reportes').select('*').order('created_at', { ascending: false });
     const cont = document.getElementById('tablaReportes');
@@ -197,7 +191,6 @@ async function actualizarTabla() {
                 ${data.map(item => {
                     const fotos = item.foto_url ? item.foto_url.split(', ') : [];
                     const fotosHtml = fotos.map((url, i) => `<a href="${url}" target="_blank" class="mr-1">🖼️${i+1}</a>`).join('');
-
                     return `
                     <tr class="border-b border-gray-200">
                         <td class="p-2 text-gray-600">${new Date(item.created_at).toLocaleDateString()}</td>
@@ -242,20 +235,16 @@ window.eliminarReporte = async (id) => {
     }
 };
 
-// 7. EXPORTAR EXCEL PROFESIONAL (ENCABEZADO ÚNICO)
+// 7. EXPORTAR EXCEL
 window.exportarExcel = async function() {
     const { data, error } = await supabase.from('reportes').select('*').order('created_at', { ascending: false });
     if (error) return alert("Error al obtener datos");
-
     const fechaGeneracion = new Date().toLocaleString();
-    const responsable = "Administrador GAD Lita";
-
     let xmlRows = "";
     data.forEach(r => {
         const f = new Date(r.created_at).toLocaleString();
         const fotosArray = r.foto_url ? r.foto_url.split(', ') : [];
         const linkFoto = fotosArray.length > 0 ? fotosArray[0] : "";
-
         xmlRows += `
         <Row>
             <Cell ss:StyleID="sDatos"><Data ss:Type="String">${f}</Data></Cell>
@@ -280,9 +269,9 @@ window.exportarExcel = async function() {
      <Worksheet ss:Name="Reportes">
       <Table ss:ExpandedColumnCount="7">
        <Column ss:Width="110"/><Column ss:Width="130"/><Column ss:Width="100"/><Column ss:Width="200"/><Column ss:Width="80"/><Column ss:Width="80"/><Column ss:Width="80"/>
-       <Row ss:Height="30"><Cell ss:MergeAcross="6" ss:StyleID="sTitulo"><Data ss:Type="String">🛡️ REPORTE DE ATENCIÓN DE INCIDENTES GAD LITA</Data></Cell></Row>
+       <Row ss:Height="30"><Cell ss:MergeAcross="6" ss:StyleID="sTitulo"><Data ss:Type="String">🛡️ REPORTE GAD LITA</Data></Cell></Row>
        <Row ss:Height="20">
-        <Cell ss:StyleID="sHeader"><Data ss:Type="String">FECHA / HORA</Data></Cell>
+        <Cell ss:StyleID="sHeader"><Data ss:Type="String">FECHA</Data></Cell>
         <Cell ss:StyleID="sHeader"><Data ss:Type="String">CIUDADANO</Data></Cell>
         <Cell ss:StyleID="sHeader"><Data ss:Type="String">SECTOR</Data></Cell>
         <Cell ss:StyleID="sHeader"><Data ss:Type="String">DETALLE</Data></Cell>
@@ -291,53 +280,53 @@ window.exportarExcel = async function() {
         <Cell ss:StyleID="sHeader"><Data ss:Type="String">EVIDENCIA</Data></Cell>
        </Row>
        ${xmlRows}
-       <Row></Row>
-       <Row><Cell ss:MergeAcross="6" ss:StyleID="sPie"><Data ss:Type="String">Reporte generado el: ${fechaGeneracion}</Data></Cell></Row>
-       <Row><Cell ss:MergeAcross="6" ss:StyleID="sPie"><Data ss:Type="String">Generado por: ${responsable}</Data></Cell></Row>
       </Table>
      </Worksheet>
     </Workbook>`;
-
     const blob = new Blob([excelTemplate], { type: "application/vnd.ms-excel" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `Reporte_Incidentes_Lita.xls`;
+    link.download = `Reporte_GAD_Lita.xls`;
     link.click();
 };
 
-// 8. SINCRONIZADOR (DEPURADO)
+// 8. SINCRONIZADOR INTEGRAL
 async function sincronizarPendientes() {
-    if (!navigator.onLine) {
-        mostrarAvisoOffline();
-        return;
-    }
+    if (!navigator.onLine) return;
     let pendientes = JSON.parse(localStorage.getItem('reportes_pendientes') || "[]");
     if (pendientes.length === 0) return;
 
     for (let i = 0; i < pendientes.length; i++) {
         try {
-            await ejecutarSubidaCompleta(pendientes[i]);
-            pendientes.splice(i, 1);
-            i--; 
-        } catch (e) {
-            console.error("Error sincronizando:", e);
-        }
+            const reporte = pendientes[i];
+            const urlsFinales = [];
+            
+            for (const b64 of reporte.foto_url) {
+                const res = await fetch(b64);
+                const blob = await res.blob();
+                const archivo = new File([blob], `offline_${Date.now()}.jpg`, { type: "image/jpeg" });
+                const url = await subirFoto(archivo);
+                urlsFinales.push(url);
+            }
+
+            reporte.foto_url = urlsFinales.join(', ');
+            const { error } = await supabase.from('reportes').insert([{
+                nombre_ciudadano: reporte.nombre_ciudadano,
+                sector: reporte.sector,
+                descripcion: reporte.descripcion,
+                ubicacion: reporte.ubicacion,
+                foto_url: reporte.foto_url,
+                estado: reporte.estado
+            }]);
+
+            if (!error) {
+                pendientes.splice(i, 1);
+                i--;
+            }
+        } catch (e) { console.error("Error sincronizando", e); break; }
     }
     localStorage.setItem('reportes_pendientes', JSON.stringify(pendientes));
-    const aviso = document.getElementById('avisoOffline');
-    if(aviso) aviso.remove();
-}
-
-function mostrarAvisoOffline() {
-    const pendientes = JSON.parse(localStorage.getItem('reportes_pendientes') || "[]");
-    if (pendientes.length > 0 && !document.getElementById('avisoOffline')) {
-        const div = document.createElement('div');
-        div.id = "avisoOffline";
-        div.className = "fixed bottom-4 left-4 right-4 bg-orange-600 text-white p-3 rounded-lg text-center text-[10px] font-bold animate-pulse shadow-2xl z-50";
-        div.innerText = `⏳ TIENES ${pendientes.length} REPORTES PENDIENTES POR SUBIR`;
-        document.body.appendChild(div);
-    }
 }
 
 window.addEventListener('online', sincronizarPendientes);
