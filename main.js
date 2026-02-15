@@ -200,14 +200,21 @@ window.eliminarReporte = async (id) => {
     }
 };
 
-// 7. EXPORTAR EXCEL (MANTENIDO)
+// 7. EXPORTAR EXCEL PROFESIONAL (ENCABEZADO ÚNICO Y FOTOS CON CLIC)
 window.exportarExcel = async function() {
     const { data, error } = await supabase.from('reportes').select('*').order('created_at', { ascending: false });
     if (error) return alert("Error al obtener datos");
 
+    const fechaGeneracion = new Date().toLocaleString();
+    const responsable = "Administrador GAD Lita";
+
     let xmlRows = "";
     data.forEach(r => {
         const f = new Date(r.created_at).toLocaleString();
+        // Procesar la primera foto para el link (o todas separadas)
+        const fotosArray = r.foto_url ? r.foto_url.split(', ') : [];
+        const linkFoto = fotosArray.length > 0 ? fotosArray[0] : "";
+
         xmlRows += `
         <Row>
             <Cell ss:StyleID="sDatos"><Data ss:Type="String">${f}</Data></Cell>
@@ -216,6 +223,7 @@ window.exportarExcel = async function() {
             <Cell ss:StyleID="sDatos"><Data ss:Type="String">${r.descripcion}</Data></Cell>
             <Cell ss:StyleID="sDatos"><Data ss:Type="String">${r.estado}</Data></Cell>
             <Cell ss:StyleID="sDatos" ss:HRef="${r.ubicacion}"><Data ss:Type="String">VER MAPA</Data></Cell>
+            ${linkFoto ? `<Cell ss:StyleID="sLink" ss:HRef="${linkFoto}"><Data ss:Type="String">VER FOTO</Data></Cell>` : '<Cell ss:StyleID="sDatos"><Data ss:Type="String">SIN FOTO</Data></Cell>'}
         </Row>`;
     });
 
@@ -225,20 +233,26 @@ window.exportarExcel = async function() {
       <Style ss:ID="sTitulo"><Alignment ss:Horizontal="Center" ss:Vertical="Center"/><Font ss:FontName="Arial" ss:Size="14" ss:Bold="1" ss:Color="#228B22"/></Style>
       <Style ss:ID="sHeader"><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/></Borders><Font ss:Bold="1"/><Interior ss:Color="#D3D3D3" ss:Pattern="Solid"/></Style>
       <Style ss:ID="sDatos"><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/></Borders></Style>
+      <Style ss:ID="sLink"><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/></Borders><Font ss:Color="#0000FF" ss:Underline="Single"/></Style>
+      <Style ss:ID="sPie"><Font ss:Italic="1" ss:Color="#666666" ss:Size="9"/></Style>
      </Styles>
      <Worksheet ss:Name="Reportes">
-      <Table ss:ExpandedColumnCount="6">
-       <Column ss:Width="110"/><Column ss:Width="150"/><Column ss:Width="120"/><Column ss:Width="250"/><Column ss:Width="80"/><Column ss:Width="100"/>
-       <Row ss:Height="30"><Cell ss:MergeAcross="5" ss:StyleID="sTitulo"><Data ss:Type="String">🛡️ REPORTE GAD LITA</Data></Cell></Row>
+      <Table ss:ExpandedColumnCount="7">
+       <Column ss:Width="110"/><Column ss:Width="130"/><Column ss:Width="100"/><Column ss:Width="200"/><Column ss:Width="80"/><Column ss:Width="80"/><Column ss:Width="80"/>
+       <Row ss:Height="30"><Cell ss:MergeAcross="6" ss:StyleID="sTitulo"><Data ss:Type="String">🛡️ REPORTE DE ATENCIÓN DE INCIDENTES GAD LITA</Data></Cell></Row>
        <Row ss:Height="20">
-        <Cell ss:StyleID="sHeader"><Data ss:Type="String">FECHA</Data></Cell>
+        <Cell ss:StyleID="sHeader"><Data ss:Type="String">FECHA / HORA</Data></Cell>
         <Cell ss:StyleID="sHeader"><Data ss:Type="String">CIUDADANO</Data></Cell>
         <Cell ss:StyleID="sHeader"><Data ss:Type="String">SECTOR</Data></Cell>
         <Cell ss:StyleID="sHeader"><Data ss:Type="String">DETALLE</Data></Cell>
         <Cell ss:StyleID="sHeader"><Data ss:Type="String">ESTADO</Data></Cell>
-        <Cell ss:StyleID="sHeader"><Data ss:Type="String">UBICACIÓN GPS</Data></Cell>
+        <Cell ss:StyleID="sHeader"><Data ss:Type="String">UBICACIÓN</Data></Cell>
+        <Cell ss:StyleID="sHeader"><Data ss:Type="String">EVIDENCIA</Data></Cell>
        </Row>
        ${xmlRows}
+       <Row></Row>
+       <Row><Cell ss:MergeAcross="6" ss:StyleID="sPie"><Data ss:Type="String">Reporte generado el: ${fechaGeneracion}</Data></Cell></Row>
+       <Row><Cell ss:MergeAcross="6" ss:StyleID="sPie"><Data ss:Type="String">Generado por: ${responsable}</Data></Cell></Row>
       </Table>
      </Worksheet>
     </Workbook>`;
@@ -247,7 +261,7 @@ window.exportarExcel = async function() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `Reporte_Lita.xls`;
+    link.download = `Reporte_Incidentes_Lita.xls`;
     link.click();
 };
 
