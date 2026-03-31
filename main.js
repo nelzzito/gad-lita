@@ -7,6 +7,99 @@ const supabase = createClient(supabaseUrl, supabaseKey)
 
 let listaFotos = []; // Almacén temporal de archivos
 
+// --- NUEVAS FUNCIONES DE VALIDACIÓN Y CARGA ---
+
+// Cargar sectores desde la base de datos al iniciar
+async function cargarSectores() {
+    const combo = document.getElementById('sector');
+    if (!combo) return;
+    try {
+        const { data } = await supabase.from('sectores').select('nombre_sector').eq('activo', true).order('nombre_sector');
+        if (data) {
+            combo.innerHTML = '<option value="" disabled selected>Seleccione el sector...</option>';
+            data.forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s.nombre_sector;
+                opt.textContent = s.nombre_sector;
+                combo.appendChild(opt);
+            });
+        }
+    } catch (e) { console.error("Error al cargar sectores", e); }
+}
+
+// Escuchar cuando el DOM esté listo para cargar los sectores
+document.addEventListener('DOMContentLoaded', cargarSectores);
+
+// Lógica de validación de cédula y bloqueo de nombre
+setTimeout(() => { // Usamos un pequeño delay para asegurar que el DOM cargó
+    const cedulaInput = document.getElementById('cedula');
+    const nombreInput = document.getElementById('nombre');
+
+    if (cedulaInput && nombreInput) {
+        // VALIDACIÓN PROFESIONAL DE NOMBRE (Solo letras y Mayúsculas)
+nombreInput.addEventListener('input', (e) => {
+    let valor = e.target.value;
+    
+    // 1. Solo permite letras (incluye Ñ y tildes) y espacios
+    valor = valor.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ ]/g, "");
+    
+    // 2. Convierte todo a MAYÚSCULAS automáticamente
+    e.target.value = valor.toUpperCase();
+});
+cedulaInput.addEventListener('input', async (e) => {
+            const ci = e.target.value;
+            
+            // Limpieza de estilos cada vez que escribe
+            cedulaInput.classList.remove('border-red-500', 'border-green-500', 'ring-2', 'ring-red-200', 'border-blue-500');
+
+            if (ci.length === 10) {
+                // 1. CASO ESPECIAL: COMODÍN 9999999999
+                if (ci === "9999999999") {
+                    cedulaInput.classList.add('border-blue-500');
+                    nombreInput.value = "";
+                    nombreInput.disabled = false;
+                    nombreInput.placeholder = "REGISTRO ESPECIAL: INGRESE NOMBRE";
+                    nombreInput.classList.remove('bg-gray-100');
+                    nombreInput.focus();
+                    return;
+                }
+
+                // 2. VALIDACIÓN MATEMÁTICA
+                if (validarCedulaEcuatoriana(ci)) {
+                    cedulaInput.classList.add('border-green-500');
+                    nombreInput.placeholder = "Buscando en base de datos... ⏳";
+                    
+                    const { data } = await supabase.from('ciudadanos').select('nombre_completo').eq('cedula', ci).single();
+
+                    if (data) {
+                        nombreInput.value = data.nombre_completo;
+                        nombreInput.disabled = true;
+                        nombreInput.classList.add('bg-gray-100', 'font-bold', 'text-blue-900');
+                    } else {
+                        nombreInput.value = "";
+                        nombreInput.disabled = false;
+                        nombreInput.placeholder = "Ciudadano nuevo: Ingrese Nombre";
+                        nombreInput.classList.remove('bg-gray-100');
+                        nombreInput.focus();
+                    }
+                } else {
+                    // CÉDULA INVÁLIDA (No pasa el algoritmo)
+                    cedulaInput.classList.add('border-red-500', 'ring-2', 'ring-red-200');
+                    nombreInput.value = "";
+                    nombreInput.disabled = true;
+                    nombreInput.placeholder = "Cédula Incorrecta o Falsa ❌";
+                }
+            } else {
+                // Si tiene menos de 10 dígitos, reseteamos el nombre
+                nombreInput.value = "";
+                nombreInput.disabled = true;
+                nombreInput.classList.add('bg-gray-100');
+                nombreInput.placeholder = "Ingrese cédula primero...";
+            }
+        });
+    }
+}, 500);
+
 // --- FUNCIÓN DE COMPRESIÓN (PARA EVITAR ERROR DE CUOTA CON 3 FOTOS OFFLINE) ---
 async function comprimirImagen(base64Str) {
     return new Promise((resolve) => {
@@ -37,6 +130,30 @@ async function comprimirImagen(base64Str) {
             resolve(canvas.toDataURL('image/jpeg', 0.6));
         };
     });
+}
+
+// --- FUNCIÓN MATEMÁTICA: VALIDAR CÉDULA ECUATORIANA ---
+function validarCedulaEcuatoriana(cedula) {
+    if (cedula === "9999999999") return true; // Comodín para casos especiales
+    if (cedula.length !== 10) return false;
+    
+    const provincia = parseInt(cedula.substring(0, 2), 10);
+    if (!((provincia > 0 && provincia <= 24) || provincia === 30)) return false;
+
+    const digitoVerificador = parseInt(cedula.substring(9, 10), 10);
+    let suma = 0;
+    const coeficientes = [2, 1, 2, 1, 2, 1, 2, 1, 2];
+
+    for (let i = 0; i < 9; i++) {
+        let valor = parseInt(cedula.substring(i, i + 1), 10) * coeficientes[i];
+        if (valor > 9) valor -= 9;
+        suma += valor;
+    }
+
+    const total = (Math.ceil(suma / 10) * 10);
+    const resultado = total - suma;
+    
+    return (resultado === 10 ? 0 : resultado) === digitoVerificador;
 }
 
 // --- LÓGICA DE FOTOS (AÑADIR Y BORRAR) ---
@@ -119,19 +236,30 @@ async function obtenerLinkMapa() {
 
 // 3. ENVÍO DEL CIUDADANO (ESTRATEGIA HÍBRIDA OFFLINE/ONLINE)
 window.enviarReporte = async function() {
-    const n = document.getElementById('nombre').value;
+    const ci = document.getElementById('cedula').value;
+    const nombreInput = document.getElementById('nombre'); 
+    const n = nombreInput.value; 
     const s = document.getElementById('sector').value;
     const d = document.getElementById('detalle').value;
     
-    if (!n || !s || !d || listaFotos.length === 0) {
-        return alert("⚠️ Complete todos los campos e incluya al menos una foto.");
+    if (!ci || ci.length < 10 || !n || !s || !d || listaFotos.length === 0) {
+        return alert("⚠️ Complete todos los campos correctamente e incluya al menos una foto.");
     }
 
     const btn = document.querySelector("button[onclick='enviarReporte()']");
-    if(btn) { btn.disabled = true; btn.innerText = "Procesando... ⏳"; }
+    if(btn) { btn.disabled = true; btn.innerText = "Enviando... ⏳"; }
 
     try {
         const gps = await obtenerLinkMapa();
+
+        // --- GUARDADO INTELIGENTE DE CIUDADANO ---
+        // Se ejecuta siempre (Online u Offline) para asegurar el registro
+        if (nombreInput.disabled === false && ci.length === 10) {
+            await supabase.from('ciudadanos').upsert({ 
+                cedula: ci, 
+                nombre_completo: n 
+            }, { onConflict: 'cedula' });
+        }
 
         if (!navigator.onLine) {
             // PROCESO OFFLINE CON COMPRESIÓN
@@ -147,6 +275,7 @@ window.enviarReporte = async function() {
             }
 
             const reporteOffline = {
+                cedula_ciudadano: ci, // Agregado para consistencia
                 nombre_ciudadano: n,
                 sector: s,
                 descripcion: d,
@@ -171,7 +300,9 @@ window.enviarReporte = async function() {
             subidas.push(await subirFoto(f));
         }
         
+        // --- INSERTAR REPORTE ---
         const { error } = await supabase.from('reportes').insert([{ 
+            cedula_ciudadano: ci,
             nombre_ciudadano: n, 
             sector: s, 
             descripcion: d, 
@@ -243,7 +374,10 @@ async function actualizarTabla() {
                     return `
                     <tr class="border-b border-gray-200">
                         <td class="p-2 text-gray-600">${new Date(item.created_at).toLocaleDateString()}</td>
-                        <td class="p-2 font-bold text-blue-900">${item.nombre_ciudadano}</td>
+                      <td class="p-2 font-bold text-blue-900 leading-tight">
+    <div class="text-[9px] text-gray-400 font-normal">${item.cedula_ciudadano || 'S/C'}</div>
+    ${item.nombre_ciudadano}
+</td>
                         <td class="p-2 text-gray-700 uppercase font-semibold">${item.sector}</td>
                         <td class="p-2 text-center">${fotosHtml || '—'}</td>
                         <td class="p-2 text-center text-base">
@@ -361,6 +495,7 @@ async function sincronizarPendientes() {
 
             reporte.foto_url = urlsFinales.join(', ');
             const { error } = await supabase.from('reportes').insert([{
+                cedula_ciudadano: reporte.cedula_ciudadano,
                 nombre_ciudadano: reporte.nombre_ciudadano,
                 sector: reporte.sector,
                 descripcion: reporte.descripcion,
