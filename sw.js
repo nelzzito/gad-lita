@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gad-lita-v4'; // <--- Recuerda subir el número (v3, v4...) para que el navegador detecte el cambio
+const CACHE_NAME = 'gad-lita-v5'; // <--- Recuerda subir el número (v3, v4...) para que el navegador detecte el cambio
 
 // Archivos básicos para que la app cargue sin internet (Mantenemos tus rutas exactas)
 const assets = [
@@ -36,18 +36,22 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const url = event.request.url;
 
-  // EXCEPCIÓN CRÍTICA: Supabase NO pasa por el caché (Tu lógica original)
-  if (url.includes('supabase.co')) {
-    return; 
-  }
+  // NO tocar Supabase
+  if (url.includes('supabase.co')) return;
 
   event.respondWith(
-    caches.match(event.request).then(response => {
-      // Devuelve el archivo si está en caché, de lo contrario lo busca en internet
-      // (Mantenemos tu lógica de "Caché primero" para máxima velocidad)
-      return response || fetch(event.request).catch(() => {
-        console.log("Modo offline: Archivo no disponible en caché.");
-      });
-    })
+    fetch(event.request)
+      .then(response => {
+        // Guardar copia en cache (actualizada)
+        const responseClone = response.clone();
+        caches.open(CACHE_NAME).then(cache => {
+          cache.put(event.request, responseClone);
+        });
+        return response;
+      })
+      .catch(() => {
+        // Si no hay internet, usa cache
+        return caches.match(event.request);
+      })
   );
 });
