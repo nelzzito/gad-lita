@@ -398,19 +398,31 @@ async function actualizarTabla() {
 
     cont.innerHTML = `
         <table class="w-full text-left text-[10px] border-collapse">
-            <thead class="bg-gray-200 text-gray-800 uppercase font-black border-b border-gray-400">
-                <tr>
-                    <th class="p-2">FECHA</th>
-                    <th class="p-2">CIUDADANO</th>
-                    <th class="p-2">SECTOR</th>
-                    <th class="p-2 text-center">FOTOS</th>
-                    <th class="p-2 text-center">MAPA</th>
-                    <th class="p-2">DETALLE</th>
-                    <th class="p-2 text-center">ESTADO</th>
-                    <th class="p-2 text-center">ACCIONES</th>
-                </tr>
-            </thead>
-            <tbody>
+           <thead class="bg-gray-200 text-gray-800 border-b border-gray-400">
+    <tr class="uppercase font-black text-[10px]">
+        <th class="p-2 relative">
+    FECHA
+    <span onclick="abrirFiltro(event, 'fecha')" class="cursor-pointer ml-1">🔽</span>
+</th>
+        <th class="p-2 relative">
+    CIUDADANO
+    <span onclick="abrirFiltro(event, 'ciudadano')" class="cursor-pointer ml-1">🔽</span>
+</th>
+        <th class="p-2 relative">
+    SECTOR
+    <span onclick="abrirFiltro(event, 'sector')" class="cursor-pointer ml-1">🔽</span>
+</th>
+        <th class="p-2 text-center">FOTOS</th>
+        <th class="p-2 text-center">MAPA</th>
+        <th class="p-2">DETALLE</th>
+       <th class="p-2 text-center relative">
+    ESTADO
+    <span onclick="abrirFiltro(event, 'estado')" class="cursor-pointer ml-1">🔽</span>
+</th>
+        <th class="p-2 text-center">ACCIONES</th>
+    </tr>
+   
+</thead>            <tbody>
                 ${data.map(item => {
                   
                     const fotos = item.foto_url ? item.foto_url.split(', ') : [];
@@ -459,6 +471,130 @@ async function actualizarTabla() {
             </tbody>
         </table>`;
 }
+
+window.filtrosActivos = {};
+
+window.abrirFiltro = function(event, columna) {
+    event.stopPropagation();
+
+    const dropdown = document.getElementById('filtroDropdown');
+    dropdown.innerHTML = "";
+
+    const filas = document.querySelectorAll("#tablaReportes tbody tr");
+
+    const indexCol =
+        columna === 'fecha' ? 0 :
+        columna === 'ciudadano' ? 1 :
+        columna === 'sector' ? 2 :
+        columna === 'estado' ? 6 : 0;
+
+    const valores = new Set();
+
+    filas.forEach(fila => {
+        const texto = fila.querySelectorAll("td")[indexCol]?.innerText.trim();
+        if (texto) valores.add(texto);
+    });
+
+    const lista = Array.from(valores).sort();
+
+    // 🔥 SI YA HAY FILTRO ACTIVO, USARLO
+    const seleccionadosPrevios = filtrosActivos[columna] || lista;
+
+    let html = `
+        <label class="flex items-center gap-1 font-bold">
+            <input type="checkbox" id="checkAll"> TODOS
+        </label>
+        <hr class="my-1">
+    `;
+
+    lista.forEach(valor => {
+        const checked = seleccionadosPrevios.includes(valor) ? "checked" : "";
+        html += `
+            <label class="flex items-center gap-1">
+                <input type="checkbox" class="checkItem" value="${valor}" ${checked}>
+                ${valor}
+            </label>
+        `;
+    });
+
+    html += `
+        <button onclick="aplicarFiltro('${columna}')" class="mt-2 bg-blue-600 text-white px-2 py-1 rounded w-full">
+            Aplicar
+        </button>
+    `;
+
+    dropdown.innerHTML = html;
+
+    // 📍 POSICIÓN
+    dropdown.classList.remove("hidden");
+    dropdown.style.top = event.pageY + "px";
+    dropdown.style.left = event.pageX + "px";
+
+    // 🔥 ESTADO DEL CHECK TODOS
+    const todosMarcados = lista.length === seleccionadosPrevios.length;
+    document.getElementById("checkAll").checked = todosMarcados;
+
+    // 🔥 CONTROL SELECT ALL
+    document.getElementById("checkAll").addEventListener("change", function() {
+        document.querySelectorAll(".checkItem").forEach(c => c.checked = this.checked);
+    });
+};
+
+
+window.aplicarFiltro = function(columna) {
+    const checks = document.querySelectorAll(".checkItem:checked");
+
+    const seleccionados = Array.from(checks).map(c => c.value);
+
+    filtrosActivos[columna] = seleccionados;
+
+    aplicarFiltrosGlobal();
+
+    const dropdown = document.getElementById('filtroDropdown');
+dropdown.classList.add("hidden");
+
+};
+
+function aplicarFiltrosGlobal() {
+    const filas = document.querySelectorAll("#tablaReportes tbody tr");
+
+    filas.forEach(fila => {
+        const celdas = fila.querySelectorAll("td");
+
+        const data = {
+            fecha: celdas[0]?.innerText.trim(),
+            ciudadano: celdas[1]?.innerText.trim(),
+            sector: celdas[2]?.innerText.trim(),
+            estado: celdas[6]?.innerText.trim()
+        };
+
+        let visible = true;
+
+        for (let col in filtrosActivos) {
+            if (!filtrosActivos[col].includes(data[col])) {
+                visible = false;
+                break;
+            }
+        }
+
+        fila.style.display = visible ? "" : "none";
+    });
+}
+
+document.addEventListener("click", (e) => {
+    const dropdown = document.getElementById('filtroDropdown');
+
+    if (!dropdown) return;
+
+    // 🔥 Si el click fue DENTRO del dropdown → NO cerrar
+    if (dropdown.contains(e.target)) return;
+
+    // 🔥 Si el click fue en el botón 🔽 → tampoco cerrar
+    if (e.target.closest("th")) return;
+
+    dropdown.classList.add("hidden");
+});
+
 
 // ============================================================
 // 6. GESTIÓN DE REPORTES (MODAL DINÁMICO)
