@@ -446,10 +446,13 @@ async function actualizarTabla() {
                         </td>
                         <td class="p-2 text-gray-500 italic max-w-[200px]">${item.descripcion}</td>
                         <td class="p-2 text-center">
-                            <span class="px-2 py-0.5 rounded shadow-sm font-black text-[8px] border ${
-                                item.estado === 'Finalizado' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-yellow-50 text-yellow-800 border-yellow-200'
-                            }">${item.estado}</span>
-                        </td>
+    <span class="px-2 py-0.5 rounded shadow-sm font-black text-[8px] border ${
+        item.estado === 'Finalizado' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+        item.estado === 'Atendido' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+        item.estado === 'Cancelado' ? 'bg-red-50 text-red-700 border-red-200' :
+        'bg-yellow-50 text-yellow-800 border-yellow-200'
+    }">${item.estado}</span>
+</td>
                        <td class="p-2 text-center">
     <div class="flex justify-center gap-1">
         ${item.estado === 'Pendiente' && item.id ? `
