@@ -1,6 +1,6 @@
 {
-  "name": "Otavalo Digital",
-  "short_name": "Otavalo GAD",
+  "name": "Lita Digital",
+  "short_name": "GAD Parroquial Lita",
   "start_url": "./index.html",
   "display": "fullscreen",
   "display_override": ["fullscreen", "minimal-ui"],

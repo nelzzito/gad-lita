@@ -1,5 +1,5 @@
 // 🔹 Versión automática (evita conflictos siempre)
-const CACHE_NAME = 'gad-otavalo-' + Date.now();
+const CACHE_NAME = 'gad-Lita-' + Date.now();
 
 // 🔹 Solo archivos estáticos (NO HTML dinámico)
 const STATIC_ASSETS = [
