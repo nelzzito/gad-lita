@@ -790,6 +790,8 @@ const excelTemplate = `<?xml version="1.0"?><?mso-application progid="Excel.Shee
                  <Cell colspan="9"><Data ss:Type="String"> </Data></Cell>
             </Row>
            
+
+            
             
             <Row>
                 <Cell ss:StyleID="sHeader"><Data ss:Type="String">Generado por:</Data></Cell>
