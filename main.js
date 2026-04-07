@@ -1,8 +1,8 @@
 // 1. CONFIGURACIÓN SUPABASE
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
 
-const supabaseUrl = 'https://kmqvhgmscebycwfjmawa.supabase.co'
-const supabaseKey = 'sb_publishable_3zVaSitNPLjesbRMx3CRyA_6SwAjjiF'
+const supabaseUrl = 'https://hnqshnbdndsvurffrpjs.supabase.co'
+const supabaseKey = 'sb_publishable_wgDPu5O49WPdWsm_xE_jmA_hJ4PoEXp'
 window.supabase = createClient(supabaseUrl, supabaseKey)
 
 let listaFotos = []; // Almacén temporal de archivos
